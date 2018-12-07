@@ -5,4 +5,4 @@ This repository contains the DataGen and ResTest tools, which are implemented as
 
 The following files with format examples are provided: "WN11.txt" and "mockup-results.txt", corresponding to the input of the DataGen and ResTest tools.
 
-This software is licensed under the GPLv3 licence. It has been developed for the article "AYNEC: All You Need for Evaluating Completion Techniques in Knowledge Graphs", sent for the ESWC19 conference and currently under revision.
+This software is licensed under the GPLv3 licence. It is presented in the article "AYNEC: All You Need for Evaluating Completion Techniques in Knowledge Graphs", sent for the ESWC19 conference and currently under revision.
