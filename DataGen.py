@@ -68,7 +68,7 @@ CREATE_SUMMARY = True
 COMPUTE_PPR = False
 
 
-VERSION = "1.1"
+VERSION = "1.1.1"
 # html imports for the generated html summary
 bokeh_js_import = '''<link
     href="https://cdn.pydata.org/bokeh/release/bokeh-1.0.1.min.css"
@@ -264,13 +264,13 @@ class DatasetsGenerator():
 				self.entity_edges[edge[1]] = list()
 			self.entity_edges[edge[1]].append(edge)
 
-	def compute_PPR(self, steps, alpha=0.05):
+	def compute_PPR(self, steps, alpha=0.02):
 		"""
-		Computes the personalised page rank of every entity.
+		Computes the personalised page rank of every entity, using only outward edges for paths.
 
 		Arguments:
 		steps -- the number of steps of the random walks used to compute PPR. If None, defaults to 1/alpha.
-		alpha -- the teleport probability during the random walks. Increase to focus probability around each source node. Default: 0.05
+		alpha -- the teleport probability during the random walks. Increase to focus probability around each source node. Default: 0.02
 
 		Generates and stores:
 		ranks -- a matrix of size NxN where N is the number of entities. Position i,j corresponds to the probability of reaching entity j from entity i after a random walk of the given number of steps and the given teleport probability during each step.
@@ -532,7 +532,6 @@ class DatasetsGenerator():
 
 		Returns: a list of negative edge examples.
 		"""
-		print(f'positive: {positive}')
 		rel = positive[0]
 		source_ranks = self.ranks[self.etoint[positive[1]]]
 		target_ranks = self.ranks[self.etoint[positive[2]]]
@@ -542,15 +541,11 @@ class DatasetsGenerator():
 		sources_probs /= sources_probs.sum()
 		targets_probs = np.array([target[1] for target in targets])
 		targets_probs /= targets_probs.sum()
-		print(f'sources_probs: {np.sort(sources_probs)[::-1][0:3]}')
-		print(f'targets_probs: {np.sort(targets_probs)[::-1][0:3]}')
 		ids_sources = np.random.choice(len(sources_probs), number_negatives, p=sources_probs)
 		ids_targets = np.random.choice(len(targets_probs), number_negatives, p=targets_probs)
 		sources = [sources[ids_sources[i]][0] for i in range(number_negatives)]
 		targets = [targets[ids_targets[i]][0] for i in range(number_negatives)]
-		print(f'sources: {sources}')
-		print(f'targets: {targets}')
-		negatives = [(rel, sources[ids_sources[i]][0], targets[ids_targets[i]][0]) for i in range(number_negatives)]
+		negatives = [(rel, sources[i], targets[i]) for i in range(number_negatives)]
 		return negatives
 
 	def generate_negatives_random(self, positive, number_negatives, keep_dom_ran=True, change_source=False, change_target=True, equal_probabilities=False):
