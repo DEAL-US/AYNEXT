@@ -59,41 +59,41 @@ Let us suppose that we want to make a modification, so that the testing edges ar
 
 ```python
 for i in trange(self.number_splits):
-			self.graphs[i] = dict()
-			self.graphs[i]["train"] = dict()
-			self.graphs[i]["test"] = dict()
-			self.graphs[i]["train"]["positive"] = set()
-			self.graphs[i]["test"]["positive"] = set()
-			for rel in tqdm(self.relations):
-				edges = [(rel, s, t) for s, t in self.grouped_edges[rel]]
-				offset = floor(len(edges) / self.number_splits * i)
-				fraction_test = fraction_test_relations.get(rel, 0.0)
-				num_test = floor(len(edges) * fraction_test)
-				ids_test = [(offset + x) % len(edges) for x in range(0, num_test)]
-				ids_train = [(offset + x) % len(edges) for x in range(num_test, len(edges))]
-				edges_test = [edges[id] for id in ids_test]
-				edges_train = [edges[id] for id in ids_train]
-				self.graphs[i]["test"]["positive"].update(edges_test)
-				self.graphs[i]["train"]["positive"].update(edges_train)
- ```
+	self.graphs[i] = dict()
+	self.graphs[i]["train"] = dict()
+	self.graphs[i]["test"] = dict()
+	self.graphs[i]["train"]["positive"] = set()
+	self.graphs[i]["test"]["positive"] = set()
+	for rel in tqdm(self.relations):
+		edges = [(rel, s, t) for s, t in self.grouped_edges[rel]]
+		offset = floor(len(edges) / self.number_splits * i)
+		fraction_test = fraction_test_relations.get(rel, 0.0)
+		num_test = floor(len(edges) * fraction_test)
+		ids_test = [(offset + x) % len(edges) for x in range(0, num_test)]
+		ids_train = [(offset + x) % len(edges) for x in range(num_test, len(edges))]
+		edges_test = [edges[id] for id in ids_test]
+		edges_train = [edges[id] for id in ids_train]
+		self.graphs[i]["test"]["positive"].update(edges_test)
+		self.graphs[i]["train"]["positive"].update(edges_train)
+	```
  
  Into the following one:
  
  ```python
 for i in trange(self.number_splits):
-			self.graphs[i] = dict()
-			self.graphs[i]["train"] = dict()
-			self.graphs[i]["test"] = dict()
-			self.graphs[i]["train"]["positive"] = set()
-			self.graphs[i]["test"]["positive"] = set()
-      offset = floor(len(self.edges) / self.number_splits * i)
-      num_test = floor(len(self.edges) * fraction_test)
-      ids_test = [(offset + x) % len(self.edges) for x in range(0, num_test)]
-      ids_train = [(offset + x) % len(self.edges) for x in range(num_test, len(self.edges))]
-      edges_test = [self.edges[id] for id in ids_test]
-      edges_train = [self.edges[id] for id in ids_train]
-      self.graphs[i]["test"]["positive"].update(edges_test)
-      self.graphs[i]["train"]["positive"].update(edges_train)
+	self.graphs[i] = dict()
+	self.graphs[i]["train"] = dict()
+	self.graphs[i]["test"] = dict()
+	self.graphs[i]["train"]["positive"] = set()
+	self.graphs[i]["test"]["positive"] = set()
+	offset = floor(len(self.edges) / self.number_splits * i)
+	num_test = floor(len(self.edges) * fraction_test)
+	ids_test = [(offset + x) % len(self.edges) for x in range(0, num_test)]
+	ids_train = [(offset + x) % len(self.edges) for x in range(num_test, len(self.edges))]
+	edges_test = [self.edges[id] for id in ids_test]
+	edges_train = [self.edges[id] for id in ids_train]
+	self.graphs[i]["test"]["positive"].update(edges_test)
+	self.graphs[i]["train"]["positive"].update(edges_train)
  ```
  
  ### Negatives generation
@@ -110,29 +110,29 @@ The generation of negatives themselves takes place in functions that take as arg
 
 ```python
 def generate_negatives_foobar(self, positive, number_negatives):
-		rel = positive[0]
-		negatives = [(rel, "foo", "bar") for i in range(number_negatives)]
-		return negatives
+	rel = positive[0]
+	negatives = [(rel, "foo", "bar") for i in range(number_negatives)]
+	return negatives
  ```
  
  And it could be included with other strategies:
  
  ```python
-          ...
-          if(strategy == "change_source"):
-						new_negatives = self.generate_negatives_random(positive, num_negatives, True, True, False)
-					elif(strategy == "change_target"):
-						new_negatives = self.generate_negatives_random(positive, num_negatives, True, False, True)
-					elif(strategy == "change_both"):
-						new_negatives = self.generate_negatives_random(positive, num_negatives, True, True, True)
-					elif(strategy == "change_source_random"):
-						new_negatives = self.generate_negatives_random(positive, num_negatives, False, True, False)
-					elif(strategy == "change_target_random"):
-						new_negatives = self.generate_negatives_random(positive, num_negatives, False, False, True)
-					elif(strategy == "change_both_random"):
-						new_negatives = self.generate_negatives_random(positive, num_negatives, False, True, True)
-					elif(strategy == "PPR"):
-						new_negatives = self.generate_negatives_PPR(positive, num_negatives)
-          elif(strategy == "foobar"):
-						new_negatives = self.generate_negatives_foobar(positive, num_negatives)
+	...
+	if(strategy == "change_source"):
+		new_negatives = self.generate_negatives_random(positive, num_negatives, True, True, False)
+	elif(strategy == "change_target"):
+		new_negatives = self.generate_negatives_random(positive, num_negatives, True, False, True)
+	elif(strategy == "change_both"):
+		new_negatives = self.generate_negatives_random(positive, num_negatives, True, True, True)
+	elif(strategy == "change_source_random"):
+		new_negatives = self.generate_negatives_random(positive, num_negatives, False, True, False)
+	elif(strategy == "change_target_random"):
+		new_negatives = self.generate_negatives_random(positive, num_negatives, False, False, True)
+	elif(strategy == "change_both_random"):
+		new_negatives = self.generate_negatives_random(positive, num_negatives, False, True, True)
+	elif(strategy == "PPR"):
+		new_negatives = self.generate_negatives_PPR(positive, num_negatives)
+	elif(strategy == "foobar"):
+		new_negatives = self.generate_negatives_foobar(positive, num_negatives)
 ```
