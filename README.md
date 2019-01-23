@@ -75,11 +75,11 @@ for i in trange(self.number_splits):
 		edges_train = [edges[id] for id in ids_train]
 		self.graphs[i]["test"]["positive"].update(edges_test)
 		self.graphs[i]["train"]["positive"].update(edges_train)
-	```
+```
  
  Into the following one:
  
- ```python
+```python
 for i in trange(self.number_splits):
 	self.graphs[i] = dict()
 	self.graphs[i]["train"] = dict()
