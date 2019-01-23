@@ -162,3 +162,92 @@ MAP:
 * It can only be computed when a completion technique outputs continuous scores.
 * It takes as positives the first N entries of the ranking, where N is the number of true positives. However, in real uses of completion techniques, the positives are either the triples with a score above a given threshold, or the triple with the highest score. In the later case (which assumes, as MRR, that there is only a single true postiive), the ranking used for MAP would only have a single element, and the metric would only measure what % of queries have the correct result at the very top, which rather than MAP, is a kind of "query accuracy".
 * It assumes that the order of the positives matter, as is the case in a search engine, where the top results are more visible. However, in real uses of completion techniques, the order of the positives does not have any effect. This objection does not apply if onle a single true positive is expected.
+
+All metrics are stored in a dictionary called metrics, which has the following structure:
+
+metrics\[technique]\[threshold]\[relation]\[metric name] = x
+
+Where threshold can be set to -1 if the metric does not depend on any threshold
+
+### Ranking based metrics
+
+The basis of ranking based metrics are queries as the following one: "what is John's father?", that is, what is the source of triple <?, father_of, John>. The former query is a source query, since it tries to infer the missing source in a triple. A target query would be, for example, "where was John born?": <John, born_in, ?>
+
+Each query has as potential results all entities in the graph, which would be sorted by score in order to then select either the top result (which assumes there is only one target/source), or those above a threshold.
+
+We can simulate the testing of these queries by grouping the testing triples by source/relation, or by relation/target. This is done with the following code, in the case of target queries:
+
+```python
+grouped = dict(tuple(results.groupby(["source", "relation"])[["target", "gt"] + techniques]))
+```
+
+We can then go over each group, which represents the ranking of a query. For each group, and for each technique, we can sort the entries by the score given by the technique, and easily compute any metric while having access to the score, the position in the ranking, and whether or not it was a true postive (the ground truth):
+
+```python
+def update_rr_ap(grouped):
+	for key, value in grouped.items():
+		positives = value[value["gt"] == 1]
+		numPositives = len(positives)
+		if(numPositives > 0):
+			rel = key[1]
+			for technique in techniques:
+				rr = 0
+				TP = 0
+				ap = 0
+				for i, row in enumerate(value.sort_values([technique], ascending=False).iterrows()):
+					score = row[1][technique]
+					gt = row[1]["gt"]
+					if(gt == 1):
+						# RR is computed using only the position of the first positive
+						if(rr == 0):
+							rr = 1 / (i + 1)
+						# We keep track of the true positives so far to compute AP
+						TP += 1
+					# AP is computed from the first N results, where N is the number of true positives
+					if(i < numPositives):
+						ap += TP / (i + 1)
+				RRs[technique][rel].append(rr)
+				APs[technique][rel].append(ap / numPositives)
+```
+
+It is in this loop that new ranking-based metrics would be implemented. The finally computed metrics are stored later:
+```python
+for technique in techniques:
+	for rel in rels:
+		mrr = np.mean(RRs[technique][rel])
+		MAP = np.mean(APs[technique][rel])
+		if(np.isnan(mrr)):
+			mrr = None
+		if(np.isnan(MAP)):
+			MAP = None		
+		metrics[technique][-1][rel]["MRR"] = mrr
+		metrics[technique][-1][rel]["MAP"] = MAP
+		lines_metrics.append((technique, -1, rel, "MRR", mrr))
+		lines_metrics.append((technique, -1, rel, "MAP", MAP))
+
+	MRRs = list(filter(None.__ne__, [metrics[technique][-1][rel]["MRR"] for rel in rels]))
+	MAPs = list(filter(None.__ne__, [metrics[technique][-1][rel]["MAP"] for rel in rels]))
+
+	metrics[technique][-1]["MRRs"] = MRRs
+	metrics[technique][-1]["MAPs"] = MAPs
+```
+
+The last lines store the value of the metrics for each relation in a single array, which is used when computing p-values.
+
+### Set based metrics
+
+Set based metrics are computed from the confusion matrix of each technique/relation/threshold. ResTest first computes the confusion matrix in a loop, and the uses a different loop to compute the metrics. It is in that loop that new metrics could be included:
+
+```python
+for technique in techniques:
+	print(technique)
+	for threshold in THRESHOLDS:
+		metrics[technique][threshold]["macro-average"] = dict()
+		metrics[technique][threshold]["micro-average"] = dict()
+		print(f'\t{threshold}')
+
+		# Precision, recall, and f1 for each relation
+		for rel in rels:
+			# New metrics would be computed here, and stored in the relevant variables
+		#Or here, if the metrics are not computed in a per-relation basis
+```
