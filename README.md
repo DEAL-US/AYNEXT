@@ -160,5 +160,5 @@ MRR:
 
 MAP:
 * It can only be computed when a completion technique outputs continuous scores.
-* It takes as positives the first N entries of the ranking, where N is the number of true positives. However, in real uses of completion techniques, the positives are the triples with a score above a given threshold.
-* It assumes that the order of the positives matter, as is the case in a search engine, where the top results are more visible. However, in real uses of completion techniques, the order of the positives does not have any effect.
+* It takes as positives the first N entries of the ranking, where N is the number of true positives. However, in real uses of completion techniques, the positives are either the triples with a score above a given threshold, or the triple with the highest score. In the later case (which assumes, as MRR, that there is only a single true postiive), the ranking used for MAP would only have a single element, and the metric would only measure what % of queries have the correct result at the very top, which rather than MAP, is a kind of "query accuracy".
+* It assumes that the order of the positives matter, as is the case in a search engine, where the top results are more visible. However, in real uses of completion techniques, the order of the positives does not have any effect. This objection does not apply if onle a single true positive is expected.
