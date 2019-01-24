@@ -24,7 +24,9 @@ The query approach takes a query as input (i.e, "where was John born?"), and out
 
 ### training -> set of <s,r,t>
 
-In this approach, a technique would not classify or give a score to triples, but would take the training set and output a set of new triples. Use DataGen to create a dataset *with no negatives* that is, with 0 negatives per positive, or use an existing dataset with negatives in the testing set but ignore them. Then, apply the techniques, and include in the results file both the true positives of the testing set (if the technique did not output some, those would be false negatives), and the output triples of the technique (if some were not in the testing set, they would be false positives). Finally, apply ResTest to the results in order to obtain metrics.
+In this approach, a technique would not classify or give a score to triples, but would take the training set and output a set of new triples. Use DataGen to create a dataset *with no negatives* that is, with 0 negatives per positive, or use an existing dataset with negatives in the testing set but ignore them. Then, apply the techniques, and include in the results file both the true positives of the testing set (if the technique did not output some, those would be false negatives), and the output triples of the technique (if some were not in the testing set, they would be false positives). If you want to account for true positives, include any triple that is not in the training set, nor the testing set, nor the output of the technique.
+
+Finally, apply ResTest to the results in order to obtain metrics.
 
 ## DataGen
 
