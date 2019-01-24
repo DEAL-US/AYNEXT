@@ -17,7 +17,7 @@ This is the standard case: the techniques are fed individual triples and output 
 
 ### <s,r,?> -> t / <?,r,t> -> s
 
-The query approach takes a query as input (i.e, "where was John born?"), and outputs a ranking with a score for every possible candidate entity. There are two possible approaches:
+The query approach takes a query as input (i.e, "where was John born?"), and outputs a ranking with a score for every possible candidate entity. There are two possibilities:
 
 * Use DataGen to create a dataset *with no negatives* that is, with 0 negatives per positive, or use an existing dataset with negatives in the testing set but ignore them. While applying the techniques, use each existing combination among the positives of source/relation or relation/target as queries. The positives of each query are those in the testing set. The negatives, any possible triple that is not in the testing or training set. Include both positives and negatives in the results file. Finally, apply ResTest to the results in order to obtain metrics, which will include MAP and MRR.
 * If applying the technique to every possible candidate is too time-consuming, Use DataGen to create a dataset *with several negatives per positive*, which will represent the negative candidates of the query. Then, apply the technique and ResTest.
