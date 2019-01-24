@@ -7,6 +7,25 @@ The following files with format examples are provided: "WN11.txt" and "mockup-re
 
 This software is licensed under the GPLv3 licence. It is presented in the article "AYNEC: All You Need for Evaluating Completion Techniques in Knowledge Graphs", sent for the ESWC19 conference and currently under revision.
 
+## Use cases
+
+Though the way completion techniques work is always very similar, there are several paradigms when applying them that may affect how testing is done. Next, we describe how our tools would be applied to three different paradigms:
+
+### <s,r,t> -> score
+
+This is the standard case: the techniques are fed individual triples and output a score. Use DataGen to create a dataset with the desired number of negatives, then apply the technique to every triple in the testing set. Finally, apply ResTest to the results in order to obtain metrics.
+
+### <s,r,?> -> t / <?,r,t> -> s
+
+The query approach takes a query as input (i.e, "where was John born?"), and outputs a ranking with a score for every possible candidate entity. There are two possible approaches:
+
+* Use DataGen to create a dataset *with no negatives* that is, with 0 negatives per positive, or use an existing dataset with negatives in the testing set but ignore them. While applying the techniques, use each existing combination among the positives of source/relation or relation/target as queries. The positives of each query are those in the testing set. The negatives, any possible triple that is not in the testing or training set. Include both positives and negatives in the results file. Finally, apply ResTest to the results in order to obtain metrics, which will include MAP and MRR.
+* If applying the technique to every possible candidate is too time-consuming, Use DataGen to create a dataset *with several negatives per positive*, which will represent the negative candidates of the query. Then, apply the technique and ResTest.
+
+### training -> set of <s,r,t>
+
+In this approach, a technique would not classify or give a score to triples, but would take the training set and output a set of new triples. Use DataGen to create a dataset *with no negatives* that is, with 0 negatives per positive, or use an existing dataset with negatives in the testing set but ignore them. Then, apply the techniques, and include in the results file both the true positives of the testing set (if the technique did not output some, those would be false negatives), and the output triples of the technique (if some were not in the testing set, they would be false positives). Finally, apply ResTest to the results in order to obtain metrics.
+
 ## DataGen
 
 The DataGen tool takes as input a knowledge graph a file with a triple with file, with tabs as separators ("<source>  <relation>  <target>" for each line). The following parameters, found at the beginning of the DataGen.py file, can be used for easy configuration of dataset generation parameters and strategies:
