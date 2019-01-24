@@ -272,3 +272,7 @@ for technique in techniques:
 			# New metrics would be computed here, and stored in the relevant variables
 		#Or here, if the metrics are not computed in a per-relation basis
 ```
+
+## Future work
+
+Add an option to consider two relation inverses when they overlap to a certain degree, instead of only when there is perfect overlapping.
