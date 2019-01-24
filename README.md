@@ -275,4 +275,5 @@ for technique in techniques:
 
 ## Future work
 
-Add an option to consider two relation inverses when they overlap to a certain degree, instead of only when there is perfect overlapping.
+* Add an option to consider two relation inverses when they overlap to a certain degree, instead of only when there is perfect overlapping.
+* Add additional export formats for the training and test sets
