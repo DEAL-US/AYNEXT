@@ -45,6 +45,7 @@ NEGATIVES_STRATEGY -- Strategy used to generate negatives. Possible: change_targ
 EXPORT_GEXF -- Whether or not the dataset should be exported as a gexf file, useful for visualisation
 CREATE_SUMMARY -- Whether or not to create an html summary of the relations' frequency and the entities' degree
 COMPUTE_PPR -- Whether or not to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used
+INVERSE_THRESHOLD -- The overlap threshold used to detect inverses. For a pair to be detected as inverses, both relations must have a fraction of their edges as inverses in the other relation above the given threshold.
 
 The next section describe how the steps of the workflow can be customised.
 
