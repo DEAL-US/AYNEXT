@@ -38,14 +38,15 @@ NEGATIVES_STRATEGY -- Strategy used to generate negatives. Possible: change_targ
 EXPORT_GEXF -- Whether or not the dataset should be exported as a gexf file, useful for visualisation
 CREATE_SUMMARY -- Whether or not to create an html summary of the relations' frequency and the entities' degree
 COMPUTE_PPR -- Whether or not to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used
+INVERSE_THRESHOLD -- The overlap threshold used to detect inverses. For a pair to be detected as inverses, both relations must have a fraction of their edges as inverses in the other relation above the given threshold.
 """
 
 
-INPUT_FILE = "./datasets/FB15K/merged.txt"
+INPUT_FILE = "../knowledge-graph-testing/datasets/WN18/merged.txt"
 
-OUTPUT_FOLDER = "./FB15K-reduced-20"
+OUTPUT_FOLDER = "./WN18-AR-test-inverses"
 
-GRAPH_FRACTION = 0.2
+GRAPH_FRACTION = 1.0
 
 GENERATE_NEGATIVES_TRAINING = True
 
@@ -53,19 +54,21 @@ REMOVE_INVERSES = True
 
 MIN_NUM_REL = 2
 
-REACH_FRACTION = 0.95
+REACH_FRACTION = 1
 
 TESTING_FRACTION = 0.2
 
 NUMBER_NEGATIVES = 1
 
-NEGATIVES_STRATEGY = "change_target"
+NEGATIVES_STRATEGY = "change_target_random"
 
 EXPORT_GEXF = True
 
 CREATE_SUMMARY = True
 
 COMPUTE_PPR = False
+
+INVERSE_THRESHOLD = 0.9
 
 
 VERSION = "1.1.1"
@@ -227,15 +230,20 @@ class DatasetsGenerator():
 		self.entities, self.relations, self.edges = reader.read()
 		self.group_edges()
 		print("\nPruning relations")
+
+		# First filtering of relations by selecting only those with a frequency above the frequency thershold
 		candidate_rels = [(rel, len(instances)) for rel, instances in self.grouped_edges.items() if len(instances) >= min_num_rel]
+		# Sorting of the candidates by frequency, in order to compute the accumulated fraction
 		candidate_rels.sort(key=lambda x: x[1], reverse=True)
 		accepted_rels = list()
+		# The list of amounts (frequencies) and accumulated fractions will be used to generate the visual summary
 		amounts = list()
 		accumulated_fractions = list()
 		accumulated_fraction = 0.0
 		y_values = list()
 		with tqdm(total=len(self.edges)) as pbar:
 			for rel, amount in candidate_rels:
+				# We add the relations and update the variables that store data about them
 				accepted_rels.append(rel)
 				amounts.append(amount)
 				accumulated_fraction += amount / len(self.edges)
@@ -243,21 +251,24 @@ class DatasetsGenerator():
 				y_values.append(accumulated_fraction)
 				pbar.update(amount)
 				pbar.refresh()
+				# If the threshold is reached, stop adding relations
 				if accumulated_fraction >= reach_fraction:
 					break
 
 		print(f'Kept {len(accepted_rels)} relations out of {len(self.relations)}')
+		# We remove all rels that are not in the set of accepted ones
 		removed_rels = [rel for rel in self.relations if rel not in accepted_rels]
 		print("\nRemoving small relations")
 		self.remove_rels(removed_rels)
+		# We create the visual summary
 		if(create_summary):
 			self.create_summary(accepted_rels, amounts, accumulated_fractions)
-
-		self.find_inverses()
+		# We find inverses, and remove them if necessary
+		self.find_inverses(INVERSE_THRESHOLD)
 		if(remove_inverses):
 			print("\nRemoving inverses")
 			self.remove_rels(self.inverses)
-
+		# We explicitely store the outgoing edges of each entity node
 		print("Storing outgoing edges for each node")
 		for edge in tqdm(self.edges):
 			if(edge[1] not in self.entity_edges):
@@ -278,22 +289,28 @@ class DatasetsGenerator():
 
 		print("Computing movements matrix")
 		self.encode(False)
+		# We compute the matrix of movements. Each row i and column j represent a node. The entry i, j is the probability of randomly moving form node i to node j.
 		matrix_movements = np.empty([len(self.entities), len(self.entities)])
 		for entity in tqdm(self.entities):
 			source_ind = self.etoint[entity]
 			edges = self.entity_edges.get(entity, list())
 			entity_count = dict()
+			# We compute how many edges there are towards each node
 			for edge in edges:
 				target = edge[2]
 				entity_count[target] = entity_count.get(target, 0) + 1
 			for target, frequency in entity_count.items():
 				target_ind = self.etoint[target]
+				# Since all walks are equally probable, the probability is always the number of edges that go to the target node divided by the total number of outgoing edges of the node
 				matrix_movements[source_ind, target_ind] = frequency / len(edges)
 		print("Computing PPR for every entity")
+		# Steps defaults to 1/alpha
 		if steps is None:
 			steps = round(1 / alpha)
 		initial_distribution = np.identity(len(self.entities))
+		# The initial matrix represents each node as a starting point, that is, 0 steps
 		ranks = np.identity(len(self.entities))
+		# Each matrix multiplication represents a step
 		for _ in tqdm(range(steps)):
 			ranks = (1 - alpha) * np.matmul(ranks, matrix_movements) + alpha * initial_distribution
 		self.ranks = ranks
@@ -385,9 +402,12 @@ class DatasetsGenerator():
 				self.grouped_edges.pop(rel, None)
 				self.relations.remove(rel)
 
-	def find_inverses(self):
+	def find_inverses(self, overlapping_threshold):
 		"""
 		Finds the inverse relations in the graph.
+
+		Arguments:
+		overlapping_threshold -- the fraction of edges that must have an inverse in the other relation to consider the pair of relations as inverses.
 
 		Computes and stores:
 		inverse_tuples -- a list of tuples with each inverse, where each tuple contains the two relations in the inverse relationship.
@@ -397,15 +417,24 @@ class DatasetsGenerator():
 		"""
 
 		print("\nFinding inverse relations")
+		# Every pair of relations (without order) is a possible pair of inverses
 		for combination in tqdm(combinations(self.relations, 2), total=len(self.relations) * (len(self.relations) - 1) / 2):
 			edges1 = self.grouped_edges[combination[0]]
 			edges2 = self.grouped_edges[combination[1]]
-			is_inverse = all((edge[1], edge[0]) in edges2 for edge in edges1)
-			is_inverse = is_inverse and all((edge[1], edge[0]) in edges1 for edge in edges2)
+			# We compute the fraction of edges from each relation that are found in the other relation, inversed
+			inversed_1_to_2 = [(edge[1], edge[0]) in edges2 for edge in edges1].count(True) / len(edges1)
+			inversed_2_to_1 = [(edge[1], edge[0]) in edges1 for edge in edges2].count(True) / len(edges2)
+			# If both fractions are above the threshold, they are considered to be a pair of inverses
+			is_inverse = (inversed_1_to_2 > overlapping_threshold) and (inversed_2_to_1 > overlapping_threshold)
+			# The pair is added to a list of tuples. The smallest relation is also added to a list of inverses, which are removed if the relevant option is toggled
 			if is_inverse:
 				self.inverse_tuples.append((combination[0], combination[1]))
-				self.inverses.add(combination[1])
+				if(len(edges1) > len(edges2)):
+					self.inverses.add(combination[1])
+				else:
+					self.inverses.add(combination[0])
 		print(f'found {len(self.inverse_tuples)} inverses')
+		# We also store in a dictionary the set of inverses of each relation
 		for r1 in self.relations:
 			self.inverses_dict[r1] = set()
 			for r2 in self.relations:
@@ -454,24 +483,34 @@ class DatasetsGenerator():
 		print("\nDividing graph")
 		train_positive = []
 		test_positive = []
+		# If we do not provide a fraction of testing for each individual relation, the same relation is used for all of them
 		if(len(fraction_test_relations) is 0):
 			fraction_test_relations = {rel: fraction_test for rel in self.relations}
-		number_test_relations = {}
+		# We create a variable number of splits.
 		for i in trange(self.number_splits):
+			# We initialise the variable where the splits are stored
 			self.graphs[i] = dict()
 			self.graphs[i]["train"] = dict()
 			self.graphs[i]["test"] = dict()
 			self.graphs[i]["train"]["positive"] = set()
 			self.graphs[i]["test"]["positive"] = set()
+			# We take a fraction of the edges of each relation
 			for rel in tqdm(self.relations):
+				# We take the edges of the current relation
 				edges = [(rel, s, t) for s, t in self.grouped_edges[rel]]
+				# Different splits use different offsets for the edges that are taken for testing
 				offset = floor(len(edges) / self.number_splits * i)
+				# We take the fraction for the current relation
 				fraction_test = fraction_test_relations.get(rel, 0.0)
+				# We compute how many edges will be taken for testing
 				num_test = floor(len(edges) * fraction_test)
+				# We compute what will be the indices of the edges that will be taken for training and testing, using the offset
 				ids_test = [(offset + x) % len(edges) for x in range(0, num_test)]
 				ids_train = [(offset + x) % len(edges) for x in range(num_test, len(edges))]
+				# We take the edges of each set using the indices
 				edges_test = [edges[id] for id in ids_test]
 				edges_train = [edges[id] for id in ids_train]
+				# Finally, we store them in the variable
 				self.graphs[i]["test"]["positive"].update(edges_test)
 				self.graphs[i]["train"]["positive"].update(edges_train)
 
@@ -533,16 +572,21 @@ class DatasetsGenerator():
 		Returns: a list of negative edge examples.
 		"""
 		rel = positive[0]
+		# We take the rank of each existing entity for both the source and target node
 		source_ranks = self.ranks[self.etoint[positive[1]]]
 		target_ranks = self.ranks[self.etoint[positive[2]]]
+		# We take as candidates for the change the entities with a rank above 0, and which are in the range/domain of the relation
 		sources = [(self.inttoe[i], rank) for i, rank in enumerate(source_ranks) if rank > 0 and self.inttoe[i] in self.domains[rel]]
 		targets = [(self.inttoe[i], rank) for i, rank in enumerate(target_ranks) if rank > 0 and self.inttoe[i] in self.ranges[rel]]
+		# We turn the ranks into arrays of probabilities by dividing them by the sum of the original array
 		sources_probs = np.array([source[1] for source in sources])
 		sources_probs /= sources_probs.sum()
 		targets_probs = np.array([target[1] for target in targets])
 		targets_probs /= targets_probs.sum()
+		# We use the probabilities as weights to select new sources and targets
 		ids_sources = np.random.choice(len(sources_probs), number_negatives, p=sources_probs)
 		ids_targets = np.random.choice(len(targets_probs), number_negatives, p=targets_probs)
+		# We select the sources and targets, and create the negatives
 		sources = [sources[ids_sources[i]][0] for i in range(number_negatives)]
 		targets = [targets[ids_targets[i]][0] for i in range(number_negatives)]
 		negatives = [(rel, sources[i], targets[i]) for i in range(number_negatives)]
@@ -564,47 +608,52 @@ class DatasetsGenerator():
 		"""
 
 		rel = positive[0]
+		# If we keep the domain and range, the candidates must be taken from the edges of the same relation as the positive
 		if(keep_dom_ran):
 			if(change_source):
 				candidates_source = [edge[0] for edge in self.grouped_edges[rel]]
 			if(change_target):
 				candidates_target = [edge[1] for edge in self.grouped_edges[rel]]
+		# Otherwise, they are taken from all edges
 		else:
 			if(change_source):
 				candidates_source = [edge[0] for edge in self.edges]
 			if(change_target):
 				candidates_target = [edge[1] for edge in self.edges]
+		# If every candidate is equally probable, without taking their frequency of appearance in the edges into account, we use the domain and range of each relation, where entities do not appear twice in each list
 		if(equal_probabilities):
 			if(change_source):
 				candidates_source = list(self.domains[rel])
 			if(change_target):
 				candidates_target = list(self.ranges[rel])
 		negatives = list()
-		# Process for each generated negative
+		# Loop for each generated negative. We do not generate all of them at once, in order to check failed attempts to generate negatives
 		for _ in range(number_negatives):
 			source = None
 			target = None
-			# Finding a new source, if required
+			# We find a new source, if required
 			if(change_source):
 				attempts = 0
 				found = False
-				# We only try to find a new source in 20 attempts. We assume it is not possible if surpassed (all candidates are equal to the original)
+				# We only try to find a new source in 20 attempts. We assume it is not possible if surpassed (all candidates are equal to the original, and thus we can not change it)
 				while not found and len(candidates_source) > 1 and attempts <= 20:
-					# After 10 attempts, it is difficult to find a new source. The original could be very frequent. We make all probabilities equal.
+					# After 10 attempts, it is difficult to find a new source. The original could be very frequent. We make all probabilities equal
 					if(attempts > 10):
 						if(keep_dom_ran):
 							candidates_source = list(self.domains[rel])
 						else:
 							candidates_source = list(self.entities.keys())
 					attempts += 1
+					# We take the new source among the candidates
 					source = sample(candidates_source, 1)[0]
+					# The attempt is only successful if the new source is different from the original one
 					found = source != positive[1]
 					if not found:
 						source = None
 			# If not required, the source remains the same
 			else:
 				source = positive[1]
-			# Finding a new target, if required
+			# Finding a new target, if required. The process is the same as with the source
 			if(change_target):
 				attempts = 0
 				found = False
@@ -621,6 +670,7 @@ class DatasetsGenerator():
 						target = None
 			else:
 				target = positive[2]
+			# We only add the negative if both the source and target changes, if required, were successful
 			if(not (change_source and source is None) and not (change_target and target is None)):
 				negatives.append((rel, source, target))
 		return negatives
@@ -632,25 +682,31 @@ class DatasetsGenerator():
 		Arguments:
 		split -- the split form which to generate negatives
 		train_test -- whether to generate negatives form the training or testing set
-		negatives_factor -- how many negatives will be generated per positive. Decimals indicate the probability of the final negative example.
+		negatives_factor -- how many negatives will be generated per positive. Decimals indicate the probability of the final negative example
 		strategy -- the negatives generation strategy.
 		clean_before -- whether or not remove existing negative examples for the given set, if there are any. Default: True
-		reject_rel_after_failute -- whether or not ignore a relation if an attempt to generate negative examples form a positive of the relation is unable to find any, which should mean that there is only one candidate.
+		reject_rel_after_failute -- whether or not ignore a relation if an attempt to generate negative examples form a positive of the relation is unable to find any, which should mean that there is only one candidate
 		"""
 
 		print("\nGenerating negatives")
+		# We generate negatives for each positive example, be it in the training or the testing set, for a given split
 		edges = self.graphs[split][train_test]["positive"]
+		# If so specified, we remove the formerly stored negatives
 		if clean_before:
 			self.graphs[split][train_test]["negative"] = set()
 		negatives = list()
 		with tqdm(edges) as pbar:
 			for positive in pbar:
+				# If a relation as been marked as "to be ignored", we skip the negatives generation. Relations are marked as such if it is impossible to generate negatives for a positive example
 				if(positive[0] not in self.ignored_rels_positives):
+					# We copy the number of negatives per positive so that we can alter is while keeping the original
 					factor_copy = negatives_factor
 					num_negatives = 0
+					# We compute the final number of negatives, which is variable if negatives_factor has decimals indicating a probability of creating an additional negative
 					while random() < factor_copy:
 						factor_copy -= 1.0
 						num_negatives += 1
+					# We create the negatives using the specified strategy
 					if(strategy == "change_source"):
 						new_negatives = self.generate_negatives_random(positive, num_negatives, True, True, False)
 					elif(strategy == "change_target"):
@@ -665,8 +721,10 @@ class DatasetsGenerator():
 						new_negatives = self.generate_negatives_random(positive, num_negatives, False, True, True)
 					elif(strategy == "PPR"):
 						new_negatives = self.generate_negatives_PPR(positive, num_negatives)
+					# If the generation of negatives was succesful, we add them to the set of negatives
 					if(len(new_negatives)) > 0:
 						negatives.extend(new_negatives)
+					# Otherwise, if the option is toggled, we mark the relation so that there are no more attempts to generate negatives from its instances
 					elif(reject_rel_after_failure):
 						self.ignored_rels_positives.add(positive[0])
 						pbar.write(f'Ignoring relation {positive[0]}: returned no negatives in an attempt')
@@ -711,15 +769,20 @@ class DatasetsGenerator():
 				file.write(f'{r1}\t{r2}\n')
 
 def main():
+	# We read and preprocess the graph
 	reader = SimpleTriplesReader(INPUT_FILE, '\t', GRAPH_FRACTION)
 	generator = DatasetsGenerator(OUTPUT_FOLDER)
 	generator.read(reader, min_num_rel=MIN_NUM_REL, reach_fraction=REACH_FRACTION, remove_inverses=REMOVE_INVERSES, create_summary=CREATE_SUMMARY)
+	# We compute the PPR matrix (quite time-consuming)
 	if(COMPUTE_PPR):
 		generator.compute_PPR(5)
+	# We split the graph
 	generator.split_graph(TESTING_FRACTION)
+	# We generate the negatives
 	generator.generate_negatives(0, "test", NUMBER_NEGATIVES, NEGATIVES_STRATEGY, True, False)
 	if(GENERATE_NEGATIVES_TRAINING):
 		generator.generate_negatives(0, "train", NUMBER_NEGATIVES, NEGATIVES_STRATEGY, True, False)
+	# We export the files
 	generator.export_files(0, True)
 	if(EXPORT_GEXF):
 		generator.export_gexf(0, True, True, True, True)

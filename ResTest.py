@@ -7,10 +7,12 @@ import numpy as np
 This script computes metrics from triple classification results from several techniques.
 
 The following arguments can be used for simple configuration
-RESULTS_FILE -- The input file containing the results of each technique. It should contain the following rows: triple source, triple relation, triple target, ground truth, and a column for each technique's results. Please, see the provided example, mockup:_results.txt.
+RESULTS_FILE -- The input file containing the results of each technique. It should contain the following rows: triple source, triple relation, triple target, ground truth, and a column for each technique's results. Please, see the provided example, mockup_results.txt.
 METRICS_OUTPUT_FILE -- The name of the file where the metrics will be stored.
 PVALUES_OUTPUT_FILE -- The name of the file where the p-values will be stored.
 THRESHOLDS -- A list with the positive/negative thresholds that will be used when computing metrics and p-values.
+TARGET_QUERY -- Whether or not use the query <source, relation, ?> to compute ranking related metrics (MRR and MAP)
+SOURCE_QUERY -- Whether or not use the query <?, relation, target> to compute ranking related metrics (MRR and MAP)
 ALPHA -- The significance threshold for the rejection of a null hypothesis. Only used for console messages.
 """
 
