@@ -178,14 +178,14 @@ We compute the following metrics: precision, recall, accuracy, MAP, and MRR. Our
 MRR:
 * It can only be computed when a completion tehcnique outputs continuous scores.
 * The value depends on the size of the ranking, which in turn depends on the number of generated negatives per positive.
-* It assumes that there is only one true positive result for each query, which is not correct in the context of KG completion. For example, there could be several positives in the testing set for query <?, born_in, Spain>.
+* It assumes that there is only one true positive result for each query, which is not correct in the context of KG completion. For example, there could be several positives in the testing set for query <?, born_in, Spain>. In other words, it should not be applied to many-to-many relations.
 
 MAP:
 * It can only be computed when a completion technique outputs continuous scores.
-* It takes as positives the first N entries of the ranking, where N is the number of true positives. However, in real uses of completion techniques, the positives are either the triples with a score above a given threshold, or the triple with the highest score. In the later case (which assumes, as MRR, that there is only a single true postiive), the ranking used for MAP would only have a single element, and the metric would only measure what % of queries have the correct result at the very top, which rather than MAP, is a kind of "query accuracy".
-* It assumes that the order of the positives matter, as is the case in a search engine, where the top results are more visible. However, in real uses of completion techniques, the order of the positives does not have any effect. This objection does not apply if onle a single true positive is expected.
+* It takes as positives the first N entries of the ranking, where N is the number of true positives. However, in real uses of completion techniques, the positives are either the triples with a score above a given threshold, or the triple with the highest score. In the later case (which assumes, as MRR, that there is only a single true postiive), the ranking used for MAP would only have a single element, and the metric would only measure what % of queries have the correct result at the very top, which rather than MAP, is the percent of Hits@1.
+* It assumes that the order of the positives matter, as is the case in a search engine, where the top results are more visible. However, in real uses of completion techniques, the order of the positives does not have any effect. This objection does not apply if only a single true positive is expected.
 
-Still, they are useful metric, and their relevancy depends on how the completion techniques will be used in production.
+Still, they are useful metrics, and their relevancy depends on how the completion techniques will be used in production.
 
 All metrics are stored in a dictionary called metrics, which has the following structure:
 
