@@ -280,3 +280,4 @@ for technique in techniques:
 
 * <s>Add an option to consider two relation inverses when they overlap to a certain degree, instead of only when there is perfect overlapping.</s>
 * Add additional export formats for the training and test sets
+* Add additional import formats if they are needed for popular knowledge graphs added in the future.
