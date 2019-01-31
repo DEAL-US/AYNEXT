@@ -33,6 +33,7 @@ Finally, apply ResTest to the results in order to obtain metrics.
 The DataGen tool takes as input a knowledge graph a file with a triple with file, with tabs as separators ("<source>  <relation>  <target>" for each line). The following parameters, found at the beginning of the DataGen.py file, can be used for easy configuration of dataset generation parameters and strategies:
 
 INPUT_FILE -- The path of the input file to read the original knowledge graph from
+INPUT_FORMAT -- The format of the input file. Should be "rdf" or "simple-triples"
 OUTPUT_FOLDER -- The path of the folder where the output will be stored. If the folder does not exist, it will be created
 GRAPH_FRACTION -- The overall fraction to take from the graph. The fraction is not the exact fraction, but the probability of keeping each edge.
 GENERATE_NEGATIVES_TRAINING -- Whether or not negatives should be generated for the training set. If False, they are only generated for the testing set
