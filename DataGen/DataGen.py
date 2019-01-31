@@ -20,12 +20,15 @@ import json
 import numpy as np
 import scipy.sparse as sparse
 import datetime
+from simpleTriplesReader import SimpleTriplesReader
+from rdfReader import RDFReader
 
 """
 This script generates evaluation datasets for knowledge graph completion techniques.
 
 The following arguments can be used for simple configuration
 INPUT_FILE -- The input file to read the original knowledge graph from
+INPUT_FORMAT -- The format of the input file. Should be "rdf" or "simple-triples"
 OUTPUT_FOLDER -- The folder where the output will be stored. If the folder does not exist, it will be created
 GRAPH_FRACTION -- The overall fraction to take from the graph. The fraction is not the exact fraction, but the probability of keeping each edge.
 GENERATE_NEGATIVES_TRAINING -- Whether or not negatives should be generated for the training set. If False, they are only generated for the testing set
@@ -41,10 +44,11 @@ COMPUTE_PPR -- Whether or not to compute the personalised page rank (PPR) of eac
 INVERSE_THRESHOLD -- The overlap threshold used to detect inverses. For a pair to be detected as inverses, both relations must have a fraction of their edges as inverses in the other relation above the given threshold.
 """
 
+INPUT_FILE = "./WN11.txt"
 
-INPUT_FILE = "../knowledge-graph-testing/datasets/WN18/merged.txt"
+INPUT_FORMAT = "simple-triples"
 
-OUTPUT_FOLDER = "./WN18-AR-test-inverses"
+OUTPUT_FOLDER = "./WN11-AR"
 
 GRAPH_FRACTION = 1.0
 
@@ -54,7 +58,7 @@ REMOVE_INVERSES = True
 
 MIN_NUM_REL = 2
 
-REACH_FRACTION = 1
+REACH_FRACTION = 1.0
 
 TESTING_FRACTION = 0.2
 
@@ -71,7 +75,7 @@ COMPUTE_PPR = False
 INVERSE_THRESHOLD = 0.9
 
 
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 # html imports for the generated html summary
 bokeh_js_import = '''<link
     href="https://cdn.pydata.org/bokeh/release/bokeh-1.0.1.min.css"
@@ -87,68 +91,6 @@ bokeh_js_import = '''<link
 <script src="https://cdn.pydata.org/bokeh/release/bokeh-1.0.1.min.js"></script>
 <script src="https://cdn.pydata.org/bokeh/release/bokeh-widgets-1.0.1.min.js"></script>
 <script src="https://cdn.pydata.org/bokeh/release/bokeh-tables-1.0.1.min.js"></script>'''
-
-class Reader():
-	"""Interface used to read knowledge graphs"""
-
-	def read(self):
-		raise NotImplementedError("This function is not implemented in the base class. Please, use other classes that extend it")
-
-class SimpleTriplesReader(Reader):
-	"""Reader of simple triples files with one line per triple. Assumes the order is <relation, source, target>"""
-
-	def __init__(self, file_path, separator, prob):
-		"""
-		Arguments:
-
-		file_path -- the path to the single file containing the knwoledge graphs
-		separator -- the separatior character or string used to separate the elements of the triple
-		prob -- probability of keeping each triple when reading the graph. 
-		If 1.0, the entire graph is kept. If lesser than one, the final graph has reduced size.
-		"""
-
-		self.file_path = file_path
-		self.separator = separator
-		self.prob = prob
-
-	def read(self):
-		"""
-		Reads the graph using the parameters specified in the constructor.
-		Expects each line to contain a triple with the relation first, then the source, then the target.
-
-		Returns: a tuple with:
-		1: a dictionary with the entities as keys (their names) as degree information as values.
-		Each value is a dictionary with the outwards degree ("out_degree key"), inwards degree ("in_degree key"), and total degree ("degree" key).
-		2: a set with the name of the relations in the graph
-		3: a set with the edges in the graph. Each edge is a tuple with the name of the relation, the source entity, and the target entity.
-		"""
-
-		entities = dict()
-		relations = set()
-		edges = set()
-
-		with open(self.file_path, "r") as file:
-			for line in file:
-				if(random() < self.prob):
-					line = line.strip()
-					triple = line.split(self.separator)
-					source = triple[0]
-					relationship = triple[1]
-					target = triple[2]
-
-					# Adding entities, relations and edges
-					if source not in entities:
-						entities[source] = dict(degree=0, out_degree=0, in_degree=0)
-					if target not in entities:
-						entities[target] = dict(degree=0, out_degree=0, in_degree=0)
-					entities[source]["out_degree"] += 1
-					entities[target]["in_degree"] += 1
-					entities[source]["degree"] += 1
-					entities[target]["degree"] += 1
-
-					relations.add(relationship)
-					edges.add((relationship, source, target))
-		return (entities, relations, edges)
 
 class DatasetsGenerator():
 	"""
@@ -526,9 +468,9 @@ class DatasetsGenerator():
 		"""
 
 		edges = self.graphs[split][train_test][positive_negative]
-		entities.update([edge[1] for edge in edges])
-		entities.update([edge[2] for edge in edges])
-		graph_edges = [(edge[1], edge[2], {"Label": edge[0], "positive": True if positive_negative == "positive" else False, "train": True if train_test == "train" else False}) for edge in edges]
+		entities.update([str(edge[1]) for edge in edges])
+		entities.update([str(edge[2]) for edge in edges])
+		graph_edges = [(str(edge[1]), str(edge[2]), {"Label": str(edge[0]), "positive": True if positive_negative == "positive" else False, "train": True if train_test == "train" else False}) for edge in edges]
 		print(f'Adding {len(graph_edges)} edges')
 		graph.add_edges_from(graph_edges)
 
@@ -763,14 +705,20 @@ class DatasetsGenerator():
 				file.write(f'{rel}\t{str(len(edges))}\n')
 		with open(self.results_directory + "/entities.txt", "w") as file:
 			for entity, degrees in sorted(self.entities.items(), key=lambda x: x[1]["degree"], reverse=True):
-				file.write(f'{entity}\t{degrees["degree"]}\t{degrees["out_degree"]}\t{degrees["in_degree"]}\n')
+				file.write(f'{entity.encode("utf-8")}\t{degrees["degree"]}\t{degrees["out_degree"]}\t{degrees["in_degree"]}\n')
 		with open(self.results_directory + "/inverses.txt", "w") as file:
 			for r1, r2 in self.inverse_tuples:
 				file.write(f'{r1}\t{r2}\n')
+		data_properties = {entity: {data_property: value for data_property, value in properties["data_properties"].items()} for entity, properties in self.entities.items() if properties["data_properties"]}
+		with open(self.results_directory + "/data_properties.json", "w") as file:
+			json.dump(data_properties, file)
 
 def main():
 	# We read and preprocess the graph
-	reader = SimpleTriplesReader(INPUT_FILE, '\t', GRAPH_FRACTION)
+	if(INPUT_FORMAT == "rdf"):
+		reader = RDFReader(INPUT_FILE, GRAPH_FRACTION)
+	else:
+		reader = SimpleTriplesReader(INPUT_FILE, '\t', GRAPH_FRACTION)
 	generator = DatasetsGenerator(OUTPUT_FOLDER)
 	generator.read(reader, min_num_rel=MIN_NUM_REL, reach_fraction=REACH_FRACTION, remove_inverses=REMOVE_INVERSES, create_summary=CREATE_SUMMARY)
 	# We compute the PPR matrix (quite time-consuming)
