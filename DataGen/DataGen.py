@@ -22,58 +22,12 @@ import scipy.sparse as sparse
 import datetime
 from simpleTriplesReader import SimpleTriplesReader
 from rdfReader import RDFReader
+import argparse
 
 """
 This script generates evaluation datasets for knowledge graph completion techniques.
-
-The following arguments can be used for simple configuration
-INPUT_FILE -- The input file to read the original knowledge graph from
-INPUT_FORMAT -- The format of the input file. Should be "rdf" or "simple-triples"
-OUTPUT_FOLDER -- The folder where the output will be stored. If the folder does not exist, it will be created
-GRAPH_FRACTION -- The overall fraction to take from the graph. The fraction is not the exact fraction, but the probability of keeping each edge.
-GENERATE_NEGATIVES_TRAINING -- Whether or not negatives should be generated for the training set. If False, they are only generated for the testing set
-REMOVE_INVERSES -- Whether or not detected inverses should be removed during preprocessing
-MIN_NUM_REL -- Minimum frequency required to keep a relation during preprocessing
-REACH_FRACTION -- Fraction of the total number of edges to keep during preprocessing, accumulating the relations, sorted by frequency. Use 1.0 to keep all edges
-TESTING_FRACTION  -- Fraction used for testing
-NUMBER_NEGATIVES -- Number of negatives to generate per positive
-NEGATIVES_STRATEGY -- Strategy used to generate negatives. Possible: change_target, change_source, change_both_random, change_target_random, change_source_random, change_both_random, PPR
-EXPORT_GEXF -- Whether or not the dataset should be exported as a gexf file, useful for visualisation
-CREATE_SUMMARY -- Whether or not to create an html summary of the relations' frequency and the entities' degree
-COMPUTE_PPR -- Whether or not to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used
-INVERSE_THRESHOLD -- The overlap threshold used to detect inverses. For a pair to be detected as inverses, both relations must have a fraction of their edges as inverses in the other relation above the given threshold.
+The main function can be found at the end of the file. Use the --help command to obtain a description of the arguments.
 """
-
-INPUT_FILE = "./WN11.txt"
-
-INPUT_FORMAT = "simple-triples"
-
-OUTPUT_FOLDER = "./WN11-AR"
-
-GRAPH_FRACTION = 1.0
-
-GENERATE_NEGATIVES_TRAINING = True
-
-REMOVE_INVERSES = True
-
-MIN_NUM_REL = 2
-
-REACH_FRACTION = 1.0
-
-TESTING_FRACTION = 0.2
-
-NUMBER_NEGATIVES = 1
-
-NEGATIVES_STRATEGY = "change_target_random"
-
-EXPORT_GEXF = True
-
-CREATE_SUMMARY = True
-
-COMPUTE_PPR = False
-
-INVERSE_THRESHOLD = 0.9
-
 
 VERSION = "1.2.0"
 # html imports for the generated html summary
@@ -149,7 +103,7 @@ class DatasetsGenerator():
 			self.domains[edge[0]].add(edge[1])
 			self.ranges[edge[0]].add(edge[2])
 
-	def read(self, reader, min_num_rel=0, reach_fraction=1, remove_inverses=False, create_summary=True):
+	def read(self, reader, inverse_threshold=0.9, min_num_rel=0, reach_fraction=1, remove_inverses=False, create_summary=True):
 		"""
 		Reads the knowledge graph using a reader, and performs preprocessing. This function corresponds to the preprocessing step of the workflow.
 
@@ -206,7 +160,7 @@ class DatasetsGenerator():
 		if(create_summary):
 			self.create_summary(accepted_rels, amounts, accumulated_fractions)
 		# We find inverses, and remove them if necessary
-		self.find_inverses(INVERSE_THRESHOLD)
+		self.find_inverses(inverse_threshold)
 		if(remove_inverses):
 			print("\nRemoving inverses")
 			self.remove_rels(self.inverses)
@@ -308,7 +262,6 @@ class DatasetsGenerator():
 		]
 		data_table = DataTable(source=source_entities_table, columns=columns, width=450, height=350)
 		entities_table_script, entities_table_div = components(data_table)
-
 		with open(self.results_directory + "/summary.html", "w") as file:
 			file.write(f'''<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>AYNEC graph summary</title>
 				{bokeh_js_import}
@@ -318,7 +271,7 @@ class DatasetsGenerator():
 				{entities_script}
 				{entities_table_script}
 
-			</head><body><section class="container"><h1>AYNEC summary - {OUTPUT_FOLDER.split('/')[-1]}</h1><h2>Relations</h2><div class="row"><div class="col-md-7">
+			</head><body><section class="container"><h1>AYNEC summary - {self.results_directory.split('/')[-1]}</h1><h2>Relations</h2><div class="row"><div class="col-md-7">
 				{relations_div}
 			</div><div class="col-md-5">
 				{relations_table_div}
@@ -436,6 +389,8 @@ class DatasetsGenerator():
 			self.graphs[i]["test"] = dict()
 			self.graphs[i]["train"]["positive"] = set()
 			self.graphs[i]["test"]["positive"] = set()
+			self.graphs[i]["train"]["negative"] = set()
+			self.graphs[i]["test"]["negative"] = set()
 			# We take a fraction of the edges of each relation
 			for rel in tqdm(self.relations):
 				# We take the edges of the current relation
@@ -689,38 +644,76 @@ class DatasetsGenerator():
 		inverses.txt -- the detected inverse relations pairs, whether or not they were removed.
 		"""
 
-		with open(self.results_directory + "/train.txt", "w") as file:
+		with open(self.results_directory + "/train.txt", "w", encoding="utf-8") as file:
 			for edge in self.graphs[split]["train"]["positive"]:
 				file.write("\t".join((edge[1], edge[0], edge[2], "1")) + "\n")
 			if(include_train_negatives):
 				for edge in self.graphs[split]["train"]["negative"]:
 					file.write("\t".join((edge[1], edge[0], edge[2], "-1")) + "\n")
-		with open(self.results_directory + "/test.txt", "w") as file:
+		with open(self.results_directory + "/test.txt", "w", encoding="utf-8") as file:
 			for edge in self.graphs[split]["test"]["positive"]:
 				file.write("\t".join((edge[1], edge[0], edge[2], "1")) + "\n")
 			for edge in self.graphs[split]["test"]["negative"]:
 				file.write("\t".join((edge[1], edge[0], edge[2], "-1")) + "\n")
-		with open(self.results_directory + "/relations.txt", "w") as file:
+		with open(self.results_directory + "/relations.txt", "w", encoding="utf-8") as file:
 			for rel, edges in sorted(self.grouped_edges.items(), key=lambda x: len(x[1]), reverse=True):
 				file.write(f'{rel}\t{str(len(edges))}\n')
-		with open(self.results_directory + "/entities.txt", "w") as file:
+		with open(self.results_directory + "/entities.txt", "w", encoding="utf-8") as file:
 			for entity, degrees in sorted(self.entities.items(), key=lambda x: x[1]["degree"], reverse=True):
 				file.write(f'{entity.encode("utf-8")}\t{degrees["degree"]}\t{degrees["out_degree"]}\t{degrees["in_degree"]}\n')
-		with open(self.results_directory + "/inverses.txt", "w") as file:
+		with open(self.results_directory + "/inverses.txt", "w", encoding="utf-8") as file:
 			for r1, r2 in self.inverse_tuples:
 				file.write(f'{r1}\t{r2}\n')
 		data_properties = {entity: {data_property: value for data_property, value in properties["data_properties"].items()} for entity, properties in self.entities.items() if properties["data_properties"]}
-		with open(self.results_directory + "/data_properties.json", "w") as file:
+		with open(self.results_directory + "/data_properties.json", "w", encoding="utf-8") as file:
 			json.dump(data_properties, file)
 
 def main():
+	parser = argparse.ArgumentParser(prog="AYNEC DataGen", fromfile_prefix_chars='@', description='Generates evaluation datasets from knowledge graphs.')
+	parser.add_argument('--version', action='version', version='%(prog)s' + VERSION)
+	parser.add_argument('--inF', required=True, help='The input file to read the original knowledge graph from')
+	parser.add_argument('--outF', required=True, help='The folder where the output will be stored. If the folder does not exist, it will be created')
+	parser.add_argument('--format', choices=['rdf', 'simpleTriplesReader'], default='simpleTriplesReader', help='The format of the input file')
+	parser.add_argument('--fractionAll', type=float, default=1.0, help='The overall fraction to take from the graph. The fraction is not the exact final fraction, but the probability of keeping each edge.')
+	parser.add_argument('--minNumRel', type=int, default=2, help='Minimum frequency required to keep a relation during preprocessing')
+	parser.add_argument('--reachFraction', type=float, default=1.0, help='Fraction of the total number of edges to keep during preprocessing, accumulating the relations, sorted by frequency. Use 1.0 to keep all edges')
+	parser.add_argument('--removeInv', action='store_true', help='Specify if detected inverses should be removed during preprocessing')
+	parser.add_argument('--thresInv', type=float, default=0.9, help='The overlap threshold used to detect inverses. For a pair to be detected as inverses, both relations must have a fraction of their edges as inverses in the other relation above the given threshold')
+	parser.add_argument('--notCreateSum', action='store_false', help='Specify if you do not want to create an html summary of the relations frequency and the entities degree')
+	parser.add_argument('--computePPR', action='store_true', help='Specify to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used')
+	parser.add_argument('--fractionTest', type=float, default=0.2, help='Fraction of the edges used for testing')
+	parser.add_argument('--numNegatives', type=int, default=1, help='Number of negatives to generate per positive')
+	parser.add_argument('--negStrategy', default='change_target', help='Strategy used to generate negatives', choices=['change_target', 'change_source', 'change_both_random', 'change_target_random', 'change_source_random', 'change_both_random', 'PPR'])
+	parser.add_argument('--notNegTraining', action='store_false', help='Specify ig negatives should not be generated for the training set. If False, they are only generated for the testing set')
+	parser.add_argument('--notExportGEXF', action='store_false', help='Specify if the dataset should not be exported as a gexf file, useful for visualisation')
+
+	args = parser.parse_args()
+
+	INPUT_FILE = args.inF
+	INPUT_FORMAT = args.format
+	OUTPUT_FOLDER = args.outF
+	GRAPH_FRACTION = args.fractionAll
+	GENERATE_NEGATIVES_TRAINING = args.notNegTraining
+	REMOVE_INVERSES = args.removeInv
+	MIN_NUM_REL = args.minNumRel
+	REACH_FRACTION = args.reachFraction
+	TESTING_FRACTION = args.fractionTest
+	NUMBER_NEGATIVES = args.numNegatives
+	NEGATIVES_STRATEGY = args.negStrategy
+	EXPORT_GEXF = args.notExportGEXF
+	CREATE_SUMMARY = args.notCreateSum
+	COMPUTE_PPR = args.computePPR
+	INVERSE_THRESHOLD = args.thresInv
+	print(OUTPUT_FOLDER)
+
 	# We read and preprocess the graph
 	if(INPUT_FORMAT == "rdf"):
 		reader = RDFReader(INPUT_FILE, GRAPH_FRACTION)
 	else:
 		reader = SimpleTriplesReader(INPUT_FILE, '\t', GRAPH_FRACTION)
 	generator = DatasetsGenerator(OUTPUT_FOLDER)
-	generator.read(reader, min_num_rel=MIN_NUM_REL, reach_fraction=REACH_FRACTION, remove_inverses=REMOVE_INVERSES, create_summary=CREATE_SUMMARY)
+	print(OUTPUT_FOLDER)
+	generator.read(reader, inverse_threshold=INVERSE_THRESHOLD, min_num_rel=MIN_NUM_REL, reach_fraction=REACH_FRACTION, remove_inverses=REMOVE_INVERSES, create_summary=CREATE_SUMMARY)
 	# We compute the PPR matrix (quite time-consuming)
 	if(COMPUTE_PPR):
 		generator.compute_PPR(5)
