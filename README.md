@@ -30,30 +30,29 @@ Finally, apply ResTest to the results in order to obtain metrics.
 
 ## DataGen
 
-The DataGen tool takes as input a knowledge graph a file with a triple with file, with tabs as separators ("<source>  <relation>  <target>" for each line). The following parameters, found at the beginning of the DataGen.py file, can be used for easy configuration of dataset generation parameters and strategies:
+The DataGen tool takes as input a knowledge graph file as input and generates training/testing datasets for completion, as well as several auxiliary files. The following parameters can be used for configuration:
 
-INPUT_FILE -- The path of the input file to read the original knowledge graph from
-INPUT_FORMAT -- The format of the input file. Should be "rdf" or "simple-triples"
-OUTPUT_FOLDER -- The path of the folder where the output will be stored. If the folder does not exist, it will be created
-GRAPH_FRACTION -- The overall fraction to take from the graph. The fraction is not the exact fraction, but the probability of keeping each edge.
-GENERATE_NEGATIVES_TRAINING -- Whether or not negatives should be generated for the training set. If False, they are only generated for the testing set
-REMOVE_INVERSES -- Whether or not detected inverses should be removed during preprocessing
-MIN_NUM_REL -- Minimum frequency required to keep a relation during preprocessing
-REACH_FRACTION -- Fraction of the total number of edges to keep during preprocessing, accumulating the relations, sorted by frequency. Use 1.0 to keep all edges
-TESTING_FRACTION  -- Fraction used for testing
-NUMBER_NEGATIVES -- Number of negatives to generate per positive
-NEGATIVES_STRATEGY -- Strategy used to generate negatives. Possible: change_target, change_source, change_both_random, change_target_random, change_source_random, change_both_random, PPR
-EXPORT_GEXF -- Whether or not the dataset should be exported as a gexf file, useful for visualisation
-CREATE_SUMMARY -- Whether or not to create an html summary of the relations' frequency and the entities' degree
-COMPUTE_PPR -- Whether or not to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used
-INVERSE_THRESHOLD -- The overlap threshold used to detect inverses. For a pair to be detected as inverses, both relations must have a fraction of their edges as inverses in the other relation above the given threshold.
+--inF: The input file to read the original knowledge graph from.
+--outF: The folder where the output will be stored. If the folder does not exist, it will be created.
+--format: The format of the input file.
+--fractionAll: The overall fraction to take from the graph. The fraction is not the exact final fraction, but the probability of keeping each edge.
+--minNumRel: Minimum frequency required to keep a relation during preprocessing.
+--reachFraction: Fraction of the total number of edges to keep during preprocessing, accumulating the relations, sorted by frequency. Use 1.0 to keep all edges.
+--removeInv: Specify if detected inverses should be removed during preprocessing.
+--thresInv: The overlap threshold used to detect inverses. For a pair to be detected as inverses, both relations must have a fraction of their edges as inverses in the other relation above the given threshold.
+--notCreateSum: Specify if you do not want to create an html summary of the relations frequency and the entities degree.
+--computePPR: Specify to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used.
+--fractionTest: Fraction of the edges used for testing.
+--numNegatives: Number of negatives to generate per positive.
+--negStrategy: Strategy used to generate negatives.
+--notNegTraining: Specify ig negatives should not be generated for the training set. If False, they are only generated for the testing set.
+--notExportGEXF: Specify if the dataset should not be exported as a gexf file, useful for visualisation.
+
 
 The next section describe how the steps of the workflow can be customised.
 
 ### Preprocessing
-The basic data reading is performed by the "read" function of a class that extends the Reader class. The provided implementation reads a file with a triple in each line.
-
-A new implementation could be, for example, a reader that reads form a file with literals attached to each entity. In this case, the dictionary attached to each entity would include other keys apart from those corresponding to the degrees.
+The basic data reading is performed by the "read" function of a class that extends the Reader class. The provided implementation reads a file with a triple in each line, or a rdf file.
 
 The preprocessing itself, however, is performed in the read function of the DatasetsGenerator class, which has most parameters relevant to preprocessing.
 
