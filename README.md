@@ -32,21 +32,21 @@ Finally, apply ResTest to the results in order to obtain metrics.
 
 The DataGen tool takes as input a knowledge graph file as input and generates training/testing datasets for completion, as well as several auxiliary files. The following parameters can be used for configuration:
 
---inF: The input file to read the original knowledge graph from.
---outF: The folder where the output will be stored. If the folder does not exist, it will be created.
---format: The format of the input file.
---fractionAll: The overall fraction to take from the graph. The fraction is not the exact final fraction, but the probability of keeping each edge.
---minNumRel: Minimum frequency required to keep a relation during preprocessing.
---reachFraction: Fraction of the total number of edges to keep during preprocessing, accumulating the relations, sorted by frequency. Use 1.0 to keep all edges.
---removeInv: Specify if detected inverses should be removed during preprocessing.
---thresInv: The overlap threshold used to detect inverses. For a pair to be detected as inverses, both relations must have a fraction of their edges as inverses in the other relation above the given threshold.
---notCreateSum: Specify if you do not want to create an html summary of the relations frequency and the entities degree.
---computePPR: Specify to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used.
---fractionTest: Fraction of the edges used for testing.
---numNegatives: Number of negatives to generate per positive.
---negStrategy: Strategy used to generate negatives.
---notNegTraining: Specify ig negatives should not be generated for the training set. If False, they are only generated for the testing set.
---notExportGEXF: Specify if the dataset should not be exported as a gexf file, useful for visualisation.
+--inF: The input file to read the original knowledge graph from.\
+--outF: The folder where the output will be stored. If the folder does not exist, it will be created.\
+--format: The format of the input file.\
+--fractionAll: The overall fraction to take from the graph. The fraction is not the exact final fraction, but the probability of keeping each edge.\
+--minNumRel: Minimum frequency required to keep a relation during preprocessing.\
+--reachFraction: Fraction of the total number of edges to keep during preprocessing, accumulating the relations, sorted by frequency. Use 1.0 to keep all edges.\
+--removeInv: Specify if detected inverses should be removed during preprocessing.\
+--thresInv: The overlap threshold used to detect inverses. For a pair to be detected as inverses, both relations must have a fraction of their edges as inverses in the other relation above the given threshold.\
+--notCreateSum: Specify if you do not want to create an html summary of the relations frequency and the entities degree.\
+--computePPR: Specify to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used.\
+--fractionTest: Fraction of the edges used for testing.\
+--numNegatives: Number of negatives to generate per positive.\
+--negStrategy: Strategy used to generate negatives.\
+--notNegTraining: Specify ig negatives should not be generated for the training set. If False, they are only generated for the testing set.\
+--notExportGEXF: Specify if the dataset should not be exported as a gexf file, useful for visualisation.\
 
 
 The next section describe how the steps of the workflow can be customised.
