@@ -34,22 +34,36 @@ The DataGen tool takes as input a knowledge graph file as input and generates tr
 
 --inF: The input file to read the original knowledge graph from.\
 --outF: The folder where the output will be stored. If the folder does not exist, it will be created.\
---format: The format of the input file.\
---fractionAll: The overall fraction to take from the graph. The fraction is not the exact final fraction, but the probability of keeping each edge.\
---minNumRel: Minimum frequency required to keep a relation during preprocessing.\
---reachFraction: Fraction of the total number of edges to keep during preprocessing, accumulating the relations, sorted by frequency. Use 1.0 to keep all edges.\
+--format: The format of the input file. Choices: 'rdf', 'simpleTriplesReader'. Default = 'simpleTriplesReader'.\
+--fractionAll: The overall fraction to take from the graph. The fraction is not the exact final fraction, but the probability of keeping each edge. Default = 1.0.\
+--minNumRel: Minimum frequency required to keep a relation during preprocessing. Default = 2\
+--reachFraction: Fraction of the total number of edges to keep during preprocessing, accumulating the relations, sorted by frequency. Use 1.0 to keep all edges. Default = 1.0.\
 --removeInv: Specify if detected inverses should be removed during preprocessing.\
---thresInv: The overlap threshold used to detect inverses. For a pair to be detected as inverses, both relations must have a fraction of their edges as inverses in the other relation above the given threshold.\
+--thresInv: The overlap threshold used to detect inverses. For a pair to be detected as inverses, both relations must have a fraction of their edges as inverses in the other relation above the given threshold. Default = 0.9.\
 --notCreateSum: Specify if you do not want to create an html summary of the relations frequency and the entities degree.\
 --computePPR: Specify to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used.\
---fractionTest: Fraction of the edges used for testing.\
---numNegatives: Number of negatives to generate per positive.\
---negStrategy: Strategy used to generate negatives.\
+--fractionTest: Fraction of the edges used for testing. Default = 0.2.\
+--numNegatives: Number of negatives to generate per positive. Default = 1.\
+--negStrategy: Strategy used to generate negatives. Choices: 'change_target', 'change_source', 'change_both_random', 'change_target_random', 'change_source_random', 'change_both_random', 'PPR'.\
 --notNegTraining: Specify ig negatives should not be generated for the training set. If False, they are only generated for the testing set.\
 --notExportGEXF: Specify if the dataset should not be exported as a gexf file, useful for visualisation.\
 
 
 The next section describe how the steps of the workflow can be customised.
+
+### Use example
+
+Let us suppose that we want to generate an evaluation dataset from the WN11 file, which contains a triple in each line. We want to use 20% of the dataset for testing, generating 2 negatives per positive by randomly replacing the source entity of the positive triples, removing relations with less than 10 instances, removing inverses with an overlapping threshold of 0.9. We would place the file in the same folder as DataGen.py and run the following command line:
+
+```
+python DataGen.py --inF ./WN11.txt --outF ./WN11-dataset --minNumRel 10 --removeInv --numNegatives 2 --negStrategy change_source_random
+```
+
+Let us now suppose that we want to generate an evaluation dataset from a rdf graph in a file named "wikidata.rdf". We want to use 50% of the dataset for testing, but without generating negatives. We want to remove relations with less than 30 instances and only keep relations that cover 90% of the graph. We also want to remove inverses want to remove inverses with an overlapping threshold of 0.95. We don't want to generate the .gexf file. Finally, since the original file is large, we only want to use aroung 75% of its triples. We would run the following command: 
+
+```
+python DataGen.py --inF ./wikidata.rdf --outF ./wikidata-dataset --format rdf --fractionAll 0.75 --minNumRel 30 --reachFraction 0.9 --removeInv --thresInv 0.95 --fractionTest 0.5 --numNegatives 0 --notExportGEXF
+```
 
 ### Preprocessing
 The basic data reading is performed by the "read" function of a class that extends the Reader class. The provided implementation reads a file with a triple in each line, or a rdf file.
@@ -161,7 +175,7 @@ def generate_negatives_foobar(self, positive, number_negatives):
 
 ## ResTest
 
-The ResTest tool takes as input a file containing the gorund truth and the score given by each technique to each triple being tested. The results of each technique should each be ina  different column, with a header corresponding to the name of the technique. The score of the technique can be either a binary score of a continuous probability. The following parameters, found at the beginning of the ResTest.py file, can be used for easy configuration of testing parameters:
+The ResTest tool takes as input a file containing the gorund truth and the score given by each technique to each triple being tested. The results of each technique should each be in a different column, with a header corresponding to the name of the technique. The score of the technique can be either a binary score of a continuous probability. The following parameters, found at the beginning of the ResTest.py file, can be used for easy configuration of testing parameters:
 
 RESULTS_FILE -- The input file containing the results of each technique. It should contain the following rows: triple source, triple relation, triple target, ground truth, and a column for each technique's results. Please, see the provided example, mockup_results.txt.
 METRICS_OUTPUT_FILE -- The name of the file where the metrics will be stored.
