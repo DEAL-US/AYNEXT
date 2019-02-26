@@ -21,7 +21,8 @@ import numpy as np
 import scipy.sparse as sparse
 import datetime
 from simpleTriplesReader import SimpleTriplesReader
-from rdfReader import RDFReader
+from NTriplesReader import NTriplesReader
+from linkedDataReader import LinkedDataReader
 import argparse
 
 """
@@ -29,7 +30,7 @@ This script generates evaluation datasets for knowledge graph completion techniq
 The main function can be found at the end of the file. Use the --help command to obtain a description of the arguments.
 """
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 # html imports for the generated html summary
 bokeh_js_import = '''<link
     href="https://cdn.pydata.org/bokeh/release/bokeh-1.0.1.min.css"
@@ -79,6 +80,7 @@ class DatasetsGenerator():
 		self.entity_edges = dict()
 		self.domains = dict()
 		self.ranges = dict()
+		self.candidates_cache = {source_target: {} for source_target in ("source", "target")}
 		if not os.path.exists(results_directory):
 			os.makedirs(results_directory)
 
@@ -220,6 +222,8 @@ class DatasetsGenerator():
 		amounts -- a list with the frequency of each relation, in the same order as "relations".
 		accumulated_fractions -- a list with the accumulated fraction of each relation, in the same order as "relations".
 		"""
+
+		print("Creating summary")
 
 		source_relations = ColumnDataSource(data=dict(x=relations, frequencies=amounts, accumulated_fractions=accumulated_fractions))
 		source_relations_table = ColumnDataSource(data=dict(x=relations, frequencies=amounts, accumulated_fractions=accumulated_fractions))
@@ -489,6 +493,18 @@ class DatasetsGenerator():
 		negatives = [(rel, sources[i], targets[i]) for i in range(number_negatives)]
 		return negatives
 
+	def get_candidates(self, relation, source_target):
+		if(relation in self.candidates_cache[source_target]):
+			candidates = self.candidates_cache[source_target][relation]
+		else:
+			if(source_target == "source"):
+				candidates = [edge[0] for edge in self.grouped_edges[relation]]
+			else:
+				candidates = [edge[1] for edge in self.grouped_edges[relation]]
+			self.candidates_cache[source_target][relation] = candidates
+		return candidates
+
+
 	def generate_negatives_random(self, positive, number_negatives, keep_dom_ran=True, change_source=False, change_target=True, equal_probabilities=False):
 		"""
 		Generates negatives from a positive by changing the source and/or target.
@@ -505,12 +521,13 @@ class DatasetsGenerator():
 		"""
 
 		rel = positive[0]
+			
 		# If we keep the domain and range, the candidates must be taken from the edges of the same relation as the positive
 		if(keep_dom_ran):
 			if(change_source):
-				candidates_source = [edge[0] for edge in self.grouped_edges[rel]]
+				candidates_source = self.get_candidates(rel, "source")
 			if(change_target):
-				candidates_target = [edge[1] for edge in self.grouped_edges[rel]]
+				candidates_target = self.get_candidates(rel, "target")
 		# Otherwise, they are taken from all edges
 		else:
 			if(change_source):
@@ -643,7 +660,7 @@ class DatasetsGenerator():
 		entities.txt -- the existing entities and their degrees, sorted by total degree.
 		inverses.txt -- the detected inverse relations pairs, whether or not they were removed.
 		"""
-
+		print("Exporting files")
 		with open(self.results_directory + "/train.txt", "w", encoding="utf-8") as file:
 			for edge in self.graphs[split]["train"]["positive"]:
 				file.write("\t".join((edge[1], edge[0], edge[2], "1")) + "\n")
@@ -673,7 +690,7 @@ def main():
 	parser.add_argument('--version', action='version', version='%(prog)s' + VERSION)
 	parser.add_argument('--inF', required=True, help='The input file to read the original knowledge graph from')
 	parser.add_argument('--outF', required=True, help='The folder where the output will be stored. If the folder does not exist, it will be created')
-	parser.add_argument('--format', choices=['rdf', 'simpleTriplesReader'], default='simpleTriplesReader', help='The format of the input file')
+	parser.add_argument('--format', choices=['rdfa', 'xml', 'nt', 'n3', 'trix', 'simpleTriplesReader'], default='simpleTriplesReader', help='The format of the input file')
 	parser.add_argument('--fractionAll', type=float, default=1.0, help='The overall fraction to take from the graph. The fraction is not the exact final fraction, but the probability of keeping each edge.')
 	parser.add_argument('--minNumRel', type=int, default=2, help='Minimum frequency required to keep a relation during preprocessing')
 	parser.add_argument('--reachFraction', type=float, default=1.0, help='Fraction of the total number of edges to keep during preprocessing, accumulating the relations, sorted by frequency. Use 1.0 to keep all edges')
@@ -684,8 +701,9 @@ def main():
 	parser.add_argument('--fractionTest', type=float, default=0.2, help='Fraction of the edges used for testing')
 	parser.add_argument('--numNegatives', type=int, default=1, help='Number of negatives to generate per positive')
 	parser.add_argument('--negStrategy', default='change_target', help='Strategy used to generate negatives', choices=['change_target', 'change_source', 'change_both_random', 'change_target_random', 'change_source_random', 'change_both_random', 'PPR'])
-	parser.add_argument('--notNegTraining', action='store_false', help='Specify ig negatives should not be generated for the training set. If False, they are only generated for the testing set')
+	parser.add_argument('--notNegTraining', action='store_false', help='Specify if negatives should not be generated for the training set. If False, they are only generated for the testing set')
 	parser.add_argument('--notExportGEXF', action='store_false', help='Specify if the dataset should not be exported as a gexf file, useful for visualisation')
+	parser.add_argument('--excludeDataProp', action='store_true', help='Specify if the dataset should not include a file with the data properties associated to entities')
 
 	args = parser.parse_args()
 
@@ -704,11 +722,14 @@ def main():
 	CREATE_SUMMARY = args.notCreateSum
 	COMPUTE_PPR = args.computePPR
 	INVERSE_THRESHOLD = args.thresInv
+	INCLUDE_DATA_PROP = not args.excludeDataProp
 	print(OUTPUT_FOLDER)
 
 	# We read and preprocess the graph
-	if(INPUT_FORMAT == "rdf"):
-		reader = RDFReader(INPUT_FILE, GRAPH_FRACTION)
+	if(INPUT_FORMAT == "nt"):
+		reader = NTriplesReader(INPUT_FILE, GRAPH_FRACTION, INCLUDE_DATA_PROP)
+	elif(INPUT_FORMAT in ["rdfa", "nt", "n3", "xml", "trix"]):
+		reader = LinkedDataReader(INPUT_FILE, GRAPH_FRACTION, INCLUDE_DATA_PROP, INPUT_FORMAT)
 	else:
 		reader = SimpleTriplesReader(INPUT_FILE, '\t', GRAPH_FRACTION)
 	generator = DatasetsGenerator(OUTPUT_FOLDER)
