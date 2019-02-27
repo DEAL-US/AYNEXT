@@ -34,7 +34,7 @@ class NTriplesReader(Reader):
 		entities = dict()
 		relations = set()
 		edges = set()
-		with open(self.file_path) as f:
+		with open(self.file_path, encoding="utf-8") as f:
 			for line in tqdm(f):
 				if(self.prob == 1.0 or random() < self.prob):
 					source, relation, target, _ = line.split(" ", 3)

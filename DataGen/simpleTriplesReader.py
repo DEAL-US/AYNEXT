@@ -45,9 +45,9 @@ class SimpleTriplesReader(Reader):
 
 					# Adding entities, relations and edges
 					if source not in entities:
-						entities[source] = dict(degree=0, out_degree=0, in_degree=0)
+						entities[source] = dict(degree=0, out_degree=0, in_degree=0, data_properties={})
 					if target not in entities:
-						entities[target] = dict(degree=0, out_degree=0, in_degree=0)
+						entities[target] = dict(degree=0, out_degree=0, in_degree=0, data_properties={})
 					entities[source]["out_degree"] += 1
 					entities[target]["in_degree"] += 1
 					entities[source]["degree"] += 1

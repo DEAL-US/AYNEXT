@@ -30,7 +30,7 @@ This script generates evaluation datasets for knowledge graph completion techniq
 The main function can be found at the end of the file. Use the --help command to obtain a description of the arguments.
 """
 
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 # html imports for the generated html summary
 bokeh_js_import = '''<link
     href="https://cdn.pydata.org/bokeh/release/bokeh-1.0.1.min.css"
@@ -660,27 +660,32 @@ class DatasetsGenerator():
 		entities.txt -- the existing entities and their degrees, sorted by total degree.
 		inverses.txt -- the detected inverse relations pairs, whether or not they were removed.
 		"""
-		print("Exporting files")
+		print("Exporting train triples")
 		with open(self.results_directory + "/train.txt", "w", encoding="utf-8") as file:
 			for edge in self.graphs[split]["train"]["positive"]:
 				file.write("\t".join((edge[1], edge[0], edge[2], "1")) + "\n")
 			if(include_train_negatives):
 				for edge in self.graphs[split]["train"]["negative"]:
 					file.write("\t".join((edge[1], edge[0], edge[2], "-1")) + "\n")
+		print("Exporting test triples")
 		with open(self.results_directory + "/test.txt", "w", encoding="utf-8") as file:
 			for edge in self.graphs[split]["test"]["positive"]:
 				file.write("\t".join((edge[1], edge[0], edge[2], "1")) + "\n")
 			for edge in self.graphs[split]["test"]["negative"]:
 				file.write("\t".join((edge[1], edge[0], edge[2], "-1")) + "\n")
+		print("Exporting relations")
 		with open(self.results_directory + "/relations.txt", "w", encoding="utf-8") as file:
 			for rel, edges in sorted(self.grouped_edges.items(), key=lambda x: len(x[1]), reverse=True):
 				file.write(f'{rel}\t{str(len(edges))}\n')
+		print("Exporting entities")
 		with open(self.results_directory + "/entities.txt", "w", encoding="utf-8") as file:
 			for entity, degrees in sorted(self.entities.items(), key=lambda x: x[1]["degree"], reverse=True):
-				file.write(f'{entity.encode("utf-8")}\t{degrees["degree"]}\t{degrees["out_degree"]}\t{degrees["in_degree"]}\n')
+				file.write(f'{entity}\t{degrees["degree"]}\t{degrees["out_degree"]}\t{degrees["in_degree"]}\n')
+		print("Exporting inverses")
 		with open(self.results_directory + "/inverses.txt", "w", encoding="utf-8") as file:
 			for r1, r2 in self.inverse_tuples:
 				file.write(f'{r1}\t{r2}\n')
+		print("Exporting data properties")
 		data_properties = {entity: {data_property: value for data_property, value in properties["data_properties"].items()} for entity, properties in self.entities.items() if properties["data_properties"]}
 		with open(self.results_directory + "/data_properties.json", "w", encoding="utf-8") as file:
 			json.dump(data_properties, file)
