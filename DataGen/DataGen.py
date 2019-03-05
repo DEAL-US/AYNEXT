@@ -1,12 +1,9 @@
 from itertools import groupby, combinations
-from operator import itemgetter
 from math import floor
 import networkx as nx
 from random import random, sample, shuffle
 import os
 from tqdm import tqdm, trange
-from time import sleep
-import matplotlib
 from bokeh.io import output_file
 from bokeh.plotting import figure, save
 from bokeh.layouts import widgetbox
@@ -14,11 +11,8 @@ from bokeh.models.widgets import DataTable, DateFormatter, TableColumn
 from bokeh.models import ColumnDataSource, HoverTool
 from bokeh.transform import dodge
 from bokeh.embed import json_item, file_html, components
-import sys
-import getopt
 import json
 import numpy as np
-import scipy.sparse as sparse
 import datetime
 from simpleTriplesReader import SimpleTriplesReader
 from NTriplesReader import NTriplesReader
@@ -30,7 +24,7 @@ This script generates evaluation datasets for knowledge graph completion techniq
 The main function can be found at the end of the file. Use the --help command to obtain a description of the arguments.
 """
 
-VERSION = "1.3.1"
+VERSION = "1.4.0"
 # html imports for the generated html summary
 bokeh_js_import = '''<link
     href="https://cdn.pydata.org/bokeh/release/bokeh-1.0.1.min.css"
@@ -105,7 +99,20 @@ class DatasetsGenerator():
 			self.domains[edge[0]].add(edge[1])
 			self.ranges[edge[0]].add(edge[2])
 
-	def read(self, reader, inverse_threshold=0.9, min_num_rel=0, reach_fraction=1, remove_inverses=False, create_summary=True):
+	def is_type(self, relation):
+		"""
+		Determines whether or not a given relation denotes the type of entities.
+
+		Arguments:
+		relation -- the name of the relation to be checked.
+
+		Returns:
+		True if relation is used to denote types, False otherwise.
+		"""
+		# So far, we only check that the relation has a typical type name
+		return "rdf-syntax-ns#type" in relation
+
+	def read(self, reader, inverse_threshold=0.9, min_num_rel=0, reach_fraction=1, remove_inverses=False, create_summary=True, separate_types=False):
 		"""
 		Reads the knowledge graph using a reader, and performs preprocessing. This function corresponds to the preprocessing step of the workflow.
 
@@ -114,10 +121,11 @@ class DatasetsGenerator():
 		reach_fraction -- fraction of the total number of edges to keep, accumulating the relations, sorted by frequency. Default: 1 (keep all).
 		remove_inverses -- whether or not to remove relations detected as inverses. Default: False.
 		create_summary -- whether or not to create an html summary including tables and plots with the frequency of each relation and degree of each entity. Note: inverses are always included in this summary, even if removed. Default: True.
+		separate_types -- whether or not the types of entities (contained in triples) should be separated from the graph and set apart
 
 		Generates and stores:
-		entities -- a dictionary with the entities as keys (their names) as degree information as values.
-		Each value is a dictionary with the outwards degree ("out_degree key"), inwards degree ("in_degree key"), and total degree ("degree" key).
+		entities -- a dictionary with the entities as keys (their names) and a dictionary with information about each entity as values.
+		Each value is a dictionary with the outwards degree ("out_degree key"), inwards degree ("in_degree key"), total degree ("degree" key), data properties ("data_properties" key), and types ("types" key).
 		relations -- a set with the name of the relations in the graph
 		edges -- a set with the edges in the graph. Each edge is a tuple with the name of the relation, the source entity, and the target entity.
 		the inverses as detailed in function find_inverses
@@ -127,9 +135,28 @@ class DatasetsGenerator():
 		print("\nReading graph")
 		self.entities, self.relations, self.edges = reader.read()
 		self.group_edges()
+
+		# If we separate the types...
+		if(separate_types):
+			type_rels = list()
+			# We first associate an empty list of types to each entity
+			for entity in self.entities:
+				self.entities[entity]["types"] = set()
+			print("\nStoring entity types")
+			# We iterate each relation
+			for rel, instances in self.grouped_edges.items():
+				# If it denotes a type, we add the types denoted by its instances and add it to a list of type relations
+				if(self.is_type(rel)):
+					type_rels.append(rel)
+					for source, target in instances:
+						self.entities[source]["types"].add(target)
+			print("\nRemoving type relations")
+			# Finally, we remove the type relations from the graph
+			self.remove_rels(type_rels)
+
 		print("\nPruning relations")
 
-		# First filtering of relations by selecting only those with a frequency above the frequency thershold
+		# First filtering of relations by selecting only those with a frequency above the frequency threshold
 		candidate_rels = [(rel, len(instances)) for rel, instances in self.grouped_edges.items() if len(instances) >= min_num_rel]
 		# Sorting of the candidates by frequency, in order to compute the accumulated fraction
 		candidate_rels.sort(key=lambda x: x[1], reverse=True)
@@ -645,13 +672,13 @@ class DatasetsGenerator():
 						pbar.refresh()
 		self.graphs[split][train_test]["negative"] = negatives
 
-	def export_files(self, split, include_train_negatives=False):
+	def export_files(self, split, include_train_negatives, include_dataproperties, include_types):
 		"""
 		Creates the output files, excluding the gexf files.
 
 		Arguments:
 		split -- the split to generate the output from.
-		include_train_negatives -- whether or not training negatives should be included. Default: False.
+		include_train_negatives -- whether or not training negatives should be included.
 
 		Outputs the following files:
 		train.txt -- the training triples, with a triple per line, separated by tabs and with a label in the following order: <source relation target label>. Label is 1 if positive and -1 if negative.
@@ -659,6 +686,8 @@ class DatasetsGenerator():
 		relations.txt -- the existing relations and their frequency, sorted by frequency.
 		entities.txt -- the existing entities and their degrees, sorted by total degree.
 		inverses.txt -- the detected inverse relations pairs, whether or not they were removed.
+		data_properties.json -- the data properties of each entity
+		types.json -- the types of each entity
 		"""
 		print("Exporting train triples")
 		with open(self.results_directory + "/train.txt", "w", encoding="utf-8") as file:
@@ -685,10 +714,17 @@ class DatasetsGenerator():
 		with open(self.results_directory + "/inverses.txt", "w", encoding="utf-8") as file:
 			for r1, r2 in self.inverse_tuples:
 				file.write(f'{r1}\t{r2}\n')
-		print("Exporting data properties")
-		data_properties = {entity: {data_property: value for data_property, value in properties["data_properties"].items()} for entity, properties in self.entities.items() if properties["data_properties"]}
-		with open(self.results_directory + "/data_properties.json", "w", encoding="utf-8") as file:
-			json.dump(data_properties, file)
+		if(include_dataproperties):
+			print("Exporting data properties")
+			data_properties = {entity: {data_property: value for data_property, value in properties["data_properties"].items()} for entity, properties in self.entities.items() if properties["data_properties"]}
+			with open(self.results_directory + "/data_properties.json", "w", encoding="utf-8") as file:
+				json.dump(data_properties, file)
+		if(include_types):
+			print("Exporting entity types")
+			types = {entity: [type for type in properties["types"]] for entity, properties in self.entities.items() if properties["types"]}
+			with open(self.results_directory + "/types.json", "w", encoding="utf-8") as file:
+				json.dump(types, file)
+
 
 def main():
 	parser = argparse.ArgumentParser(prog="AYNEC DataGen", fromfile_prefix_chars='@', description='Generates evaluation datasets from knowledge graphs.')
@@ -709,6 +745,7 @@ def main():
 	parser.add_argument('--notNegTraining', action='store_false', help='Specify if negatives should not be generated for the training set. If False, they are only generated for the testing set')
 	parser.add_argument('--notExportGEXF', action='store_false', help='Specify if the dataset should not be exported as a gexf file, useful for visualisation')
 	parser.add_argument('--excludeDataProp', action='store_true', help='Specify if the dataset should not include a file with the data properties associated to entities')
+	parser.add_argument('--separateTypes', action='store_true', help='Specify if triples containing entity types should be separated from the rest and included in a separate file with the types of each entity')
 
 	args = parser.parse_args()
 
@@ -728,6 +765,7 @@ def main():
 	COMPUTE_PPR = args.computePPR
 	INVERSE_THRESHOLD = args.thresInv
 	INCLUDE_DATA_PROP = not args.excludeDataProp
+	SEPARATE_TYPES = args.separateTypes
 	print(OUTPUT_FOLDER)
 
 	# We read and preprocess the graph
@@ -739,7 +777,7 @@ def main():
 		reader = SimpleTriplesReader(INPUT_FILE, '\t', GRAPH_FRACTION)
 	generator = DatasetsGenerator(OUTPUT_FOLDER)
 	print(OUTPUT_FOLDER)
-	generator.read(reader, inverse_threshold=INVERSE_THRESHOLD, min_num_rel=MIN_NUM_REL, reach_fraction=REACH_FRACTION, remove_inverses=REMOVE_INVERSES, create_summary=CREATE_SUMMARY)
+	generator.read(reader, inverse_threshold=INVERSE_THRESHOLD, min_num_rel=MIN_NUM_REL, reach_fraction=REACH_FRACTION, remove_inverses=REMOVE_INVERSES, create_summary=CREATE_SUMMARY, separate_types=SEPARATE_TYPES)
 	# We compute the PPR matrix (quite time-consuming)
 	if(COMPUTE_PPR):
 		generator.compute_PPR(5)
@@ -750,7 +788,7 @@ def main():
 	if(GENERATE_NEGATIVES_TRAINING):
 		generator.generate_negatives(0, "train", NUMBER_NEGATIVES, NEGATIVES_STRATEGY, True, False)
 	# We export the files
-	generator.export_files(0, True)
+	generator.export_files(0, True, INCLUDE_DATA_PROP, SEPARATE_TYPES)
 	if(EXPORT_GEXF):
 		generator.export_gexf(0, True, True, True, True)
 
