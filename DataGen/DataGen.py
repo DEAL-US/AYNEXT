@@ -24,7 +24,7 @@ This script generates evaluation datasets for knowledge graph completion techniq
 The main function can be found at the end of the file. Use the --help command to obtain a description of the arguments.
 """
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 # html imports for the generated html summary
 bokeh_js_import = '''<link
     href="https://cdn.pydata.org/bokeh/release/bokeh-1.0.1.min.css"
@@ -741,7 +741,7 @@ def main():
 	parser.add_argument('--computePPR', action='store_true', help='Specify to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used')
 	parser.add_argument('--fractionTest', type=float, default=0.2, help='Fraction of the edges used for testing')
 	parser.add_argument('--numNegatives', type=int, default=1, help='Number of negatives to generate per positive')
-	parser.add_argument('--negStrategy', default='change_target', help='Strategy used to generate negatives', choices=['change_target', 'change_source', 'change_both_random', 'change_target_random', 'change_source_random', 'change_both_random', 'PPR'])
+	parser.add_argument('--negStrategy', default='change_target', help='Strategy used to generate negatives', choices=['change_target', 'change_source', 'change_both', 'change_target_random', 'change_source_random', 'change_both_random', 'PPR'])
 	parser.add_argument('--notNegTraining', action='store_false', help='Specify if negatives should not be generated for the training set. If False, they are only generated for the testing set')
 	parser.add_argument('--notExportGEXF', action='store_false', help='Specify if the dataset should not be exported as a gexf file, useful for visualisation')
 	parser.add_argument('--excludeDataProp', action='store_true', help='Specify if the dataset should not include a file with the data properties associated to entities')
