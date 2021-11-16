@@ -1,22 +1,19 @@
-from itertools import groupby, combinations
+from itertools import combinations
 from math import floor
 import networkx as nx
-from random import random, sample, shuffle
+from random import random, choice
 import os
 from tqdm import tqdm, trange
-from bokeh.io import output_file
-from bokeh.plotting import figure, save
-from bokeh.layouts import widgetbox
-from bokeh.models.widgets import DataTable, DateFormatter, TableColumn
+from bokeh.plotting import figure
+from bokeh.models.widgets import DataTable, TableColumn
 from bokeh.models import ColumnDataSource, HoverTool
 from bokeh.transform import dodge
-from bokeh.embed import json_item, file_html, components
+from bokeh.embed import components
 import json
 import numpy as np
 import datetime
 from simpleTriplesReader import SimpleTriplesReader
 from NTriplesReader import NTriplesReader
-from linkedDataReader import LinkedDataReader
 import argparse
 
 """
@@ -61,6 +58,8 @@ class DatasetsGenerator():
 		number splits -- in case several training/set splits must be generated. Default: 1 split, corresponding to one training/set split
 		"""
 
+		self.ents_source = []
+		self.ents_target = []
 		self.entities = dict()
 		self.relations = set()
 		self.edges = set()
@@ -98,6 +97,8 @@ class DatasetsGenerator():
 			self.grouped_edges[edge[0]].add((edge[1], edge[2]))
 			self.domains[edge[0]].add(edge[1])
 			self.ranges[edge[0]].add(edge[2])
+			self.ents_source.append(edge[0])
+			self.ents_target.append(edge[1])
 
 	def is_type(self, relation):
 		"""
@@ -558,9 +559,9 @@ class DatasetsGenerator():
 		# Otherwise, they are taken from all edges
 		else:
 			if(change_source):
-				candidates_source = [edge[0] for edge in self.edges]
+				candidates_source = self.ents_source
 			if(change_target):
-				candidates_target = [edge[1] for edge in self.edges]
+				candidates_target = self.ents_target
 		# If every candidate is equally probable, without taking their frequency of appearance in the edges into account, we use the domain and range of each relation, where entities do not appear twice in each list
 		if(equal_probabilities):
 			if(change_source):
@@ -586,7 +587,7 @@ class DatasetsGenerator():
 							candidates_source = list(self.entities.keys())
 					attempts += 1
 					# We take the new source among the candidates
-					source = sample(candidates_source, 1)[0]
+					source = choice(candidates_source)
 					# The attempt is only successful if the new source is different from the original one
 					found = source != positive[1]
 					if not found:
@@ -605,7 +606,7 @@ class DatasetsGenerator():
 						else:
 							candidates_target = list(self.entities.keys())
 					attempts += 1
-					target = sample(candidates_target, 1)[0]
+					target = choice(candidates_target)
 					found = target != positive[2]
 					if not found:
 						target = None
@@ -771,8 +772,6 @@ def main():
 	# We read and preprocess the graph
 	if(INPUT_FORMAT == "nt"):
 		reader = NTriplesReader(INPUT_FILE, GRAPH_FRACTION, INCLUDE_DATA_PROP)
-	elif(INPUT_FORMAT in ["rdfa", "nt", "n3", "xml", "trix"]):
-		reader = LinkedDataReader(INPUT_FILE, GRAPH_FRACTION, INCLUDE_DATA_PROP, INPUT_FORMAT)
 	else:
 		reader = SimpleTriplesReader(INPUT_FILE, '\t', GRAPH_FRACTION)
 	generator = DatasetsGenerator(OUTPUT_FOLDER)
