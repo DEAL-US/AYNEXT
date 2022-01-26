@@ -1,5 +1,17 @@
 # AYNEC
-Tools from the AYNEC suite
+
+If you find AYNEC useful, please consider citing it as:
+
+```bibtex
+@inproceedings{Ayala2019AYNEC,
+  author    = {Daniel Ayala and Agust{\'{\i}}n Borrego and Inma Hern{\'{a}}ndez and Carlos R. Rivero and David Ruiz},
+  title     = {{AYNEC:} All You Need for Evaluating Completion Techniques in Knowledge Graphs},
+  booktitle = {The Semantic Web - 16th International Conference, {ESWC} 2019},
+  pages     = {397--411},
+  year      = {2019},
+  doi       = {10.1007/978-3-030-21348-0\_26},
+}
+```
 
 This repository contains the DataGen and ResTest tools, which are implemented as python scripts. To run them, check the parameters at the start of the python file, and run it from console. The python files contains documentation about every parameter and function.
 
