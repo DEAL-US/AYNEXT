@@ -1,3 +1,4 @@
+from dataclasses import replace
 from itertools import combinations
 from math import floor
 import networkx as nx
@@ -97,8 +98,8 @@ class DatasetsGenerator():
 			self.grouped_edges[edge[0]].add((edge[1], edge[2]))
 			self.domains[edge[0]].add(edge[1])
 			self.ranges[edge[0]].add(edge[2])
-			self.ents_source.append(edge[0])
-			self.ents_target.append(edge[1])
+			self.ents_source.append(edge[1])
+			self.ents_target.append(edge[2])
 
 	def is_type(self, relation):
 		"""
@@ -641,13 +642,10 @@ class DatasetsGenerator():
 			for positive in pbar:
 				# If a relation as been marked as "to be ignored", we skip the negatives generation. Relations are marked as such if it is impossible to generate negatives for a positive example
 				if(positive[0] not in self.ignored_rels_positives):
-					# We copy the number of negatives per positive so that we can alter is while keeping the original
-					factor_copy = negatives_factor
-					num_negatives = 0
-					# We compute the final number of negatives, which is variable if negatives_factor has decimals indicating a probability of creating an additional negative
-					while random() < factor_copy:
-						factor_copy -= 1.0
-						num_negatives += 1
+					num_negatives = int(negatives_factor)
+					if(negatives_factor % 1 != 0):
+						if(random() < (negatives_factor % 1)):
+							num_negatives += 1
 					# We create the negatives using the specified strategy
 					if(strategy == "change_source"):
 						new_negatives = self.generate_negatives_random(positive, num_negatives, True, True, False)
