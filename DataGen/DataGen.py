@@ -15,6 +15,7 @@ import numpy as np
 import datetime
 from simpleTriplesReader import SimpleTriplesReader
 from NTriplesReader import NTriplesReader
+from linkedDataReader import LinkedDataReader
 import argparse
 
 """
@@ -25,19 +26,19 @@ The main function can be found at the end of the file. Use the --help command to
 VERSION = "1.5.0"
 # html imports for the generated html summary
 bokeh_js_import = '''<link
-    href="https://cdn.pydata.org/bokeh/release/bokeh-1.0.1.min.css"
+    href="https://cdn.pydata.org/bokeh/release/bokeh-2.4.2.min.css"
     rel="stylesheet" type="text/css">
 <link
-    href="https://cdn.pydata.org/bokeh/release/bokeh-widgets-1.0.1.min.css"
+    href="https://cdn.pydata.org/bokeh/release/bokeh-widgets-2.4.2.min.css"
     rel="stylesheet" type="text/css">
 <link
-    href="https://cdn.pydata.org/bokeh/release/bokeh-tables-1.0.1.min.css"
+    href="https://cdn.pydata.org/bokeh/release/bokeh-tables-2.4.2.min.css"
     rel="stylesheet" type="text/css">
 <link href="https://netdna.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet"/>
 
-<script src="https://cdn.pydata.org/bokeh/release/bokeh-1.0.1.min.js"></script>
-<script src="https://cdn.pydata.org/bokeh/release/bokeh-widgets-1.0.1.min.js"></script>
-<script src="https://cdn.pydata.org/bokeh/release/bokeh-tables-1.0.1.min.js"></script>'''
+<script src="https://cdn.pydata.org/bokeh/release/bokeh-2.4.2.min.js"></script>
+<script src="https://cdn.pydata.org/bokeh/release/bokeh-widgets-2.4.2.min.js"></script>
+<script src="https://cdn.pydata.org/bokeh/release/bokeh-tables-2.4.2.min.js"></script>'''
 
 class DatasetsGenerator():
 	"""
@@ -256,6 +257,7 @@ class DatasetsGenerator():
 
 		source_relations = ColumnDataSource(data=dict(x=relations, frequencies=amounts, accumulated_fractions=accumulated_fractions))
 		source_relations_table = ColumnDataSource(data=dict(x=relations, frequencies=amounts, accumulated_fractions=accumulated_fractions))
+		print(relations[:5])
 		p = figure(x_range=relations, plot_height=350, title="Relation frequency histogram")
 		p.vbar(x="x", top="frequencies", width=0.9, source=source_relations)
 		p.xgrid.grid_line_color = None
@@ -274,8 +276,14 @@ class DatasetsGenerator():
 		relations_table_script, relations_table_div = components(data_table)
 
 		entities = sorted(self.entities.items(), key=lambda x: x[1]["degree"], reverse=True)
-		source_entities = ColumnDataSource(data=dict(x=[entity[0] for entity in entities], degree=[entity[1]["degree"] for entity in entities], out_degree=[entity[1]["out_degree"] for entity in entities], in_degree=[entity[1]["in_degree"] for entity in entities]))
-		source_entities_table = ColumnDataSource(data=dict(x=[entity[0] for entity in entities], degree=[entity[1]["degree"] for entity in entities], out_degree=[entity[1]["out_degree"] for entity in entities], in_degree=[entity[1]["in_degree"] for entity in entities]))
+		source_entities = ColumnDataSource(	data=dict(x=[entity[0] for entity in entities], 
+											degree=[entity[1]["degree"] for entity in entities], 
+											out_degree=[entity[1]["out_degree"] for entity in entities], 
+											in_degree=[entity[1]["in_degree"] for entity in entities]))
+		source_entities_table = ColumnDataSource(	data=dict(x=[entity[0] for entity in entities], 
+													degree=[entity[1]["degree"] for entity in entities], 
+													out_degree=[entity[1]["out_degree"] for entity in entities], 
+													in_degree=[entity[1]["in_degree"] for entity in entities]))
 		p = figure(x_range=[entity[0] for entity in entities], plot_height=350, title="Entity degree histogram")
 		p.vbar(color="#c9d9d3", x=dodge('x', -0.25, range=p.x_range), top="degree", width=0.2, source=source_entities)
 		p.vbar(color="#718dbf", x=dodge('x', 0, range=p.x_range), top="out_degree", width=0.2, source=source_entities)
@@ -412,7 +420,7 @@ class DatasetsGenerator():
 		train_positive = []
 		test_positive = []
 		# If we do not provide a fraction of testing for each individual relation, the same relation is used for all of them
-		if(len(fraction_test_relations) is 0):
+		if(len(fraction_test_relations) == 0):
 			fraction_test_relations = {rel: fraction_test for rel in self.relations}
 		# We create a variable number of splits.
 		for i in trange(self.number_splits):
@@ -770,6 +778,8 @@ def main():
 	# We read and preprocess the graph
 	if(INPUT_FORMAT == "nt"):
 		reader = NTriplesReader(INPUT_FILE, GRAPH_FRACTION, INCLUDE_DATA_PROP)
+	elif(INPUT_FORMAT in ["rdfa", "nt", "n3", "xml", "trix"]):
+		reader = LinkedDataReader(INPUT_FILE, GRAPH_FRACTION, INCLUDE_DATA_PROP, INPUT_FORMAT)
 	else:
 		reader = SimpleTriplesReader(INPUT_FILE, '\t', GRAPH_FRACTION)
 	generator = DatasetsGenerator(OUTPUT_FOLDER)
