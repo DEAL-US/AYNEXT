@@ -466,7 +466,7 @@ class DatasetsGenerator():
 		edges = self.graphs[split][train_test][positive_negative]
 		entities.update([str(edge[1]) for edge in edges])
 		entities.update([str(edge[2]) for edge in edges])
-		graph_edges = [(str(edge[1]), str(edge[2]), {"Label": str(edge[0]), "positive": True if positive_negative == "positive" else False, "train": True if train_test == "train" else False}) for edge in edges]
+		graph_edges = [(str(edge[1]), str(edge[2]), {"Label": str(edge[0]), "positive": True if positive_negative == "positive" else False, "train": True if train_test == "train" else False, "type": edge[3]}) for edge in edges]
 		print(f'Adding {len(graph_edges)} edges')
 		graph.add_edges_from(graph_edges)
 
@@ -527,7 +527,7 @@ class DatasetsGenerator():
 		# We select the sources and targets, and create the negatives
 		sources = [sources[ids_sources[i]][0] for i in range(number_negatives)]
 		targets = [targets[ids_targets[i]][0] for i in range(number_negatives)]
-		negatives = [(rel, sources[i], targets[i]) for i in range(number_negatives)]
+		negatives = [(rel, sources[i], targets[i], 'CB') for i in range(number_negatives)]
 		return negatives
 
 	def get_candidates(self, relation, source_target):
@@ -556,6 +556,13 @@ class DatasetsGenerator():
 
 		Returns: a list of negative edge examples.
 		"""
+
+		if(change_source and change_target):
+			tc = "CB"
+		elif(change_source):
+			tc = "CS"
+		elif(change_target):
+			tc = "CT"
 
 		rel = positive[0]
 			
@@ -623,12 +630,13 @@ class DatasetsGenerator():
 				target = positive[2]
 			# We only add the negative if both the source and target changes, if required, were successful
 			if(not (change_source and source is None) and not (change_target and target is None)):
-				negatives.append((rel, source, target))
+				negatives.append((rel, source, target, tc))
 		return negatives
 
 	def generate_negatives(self, split, train_test, negatives_factor, strategy, clean_before=True, reject_rel_after_failure=False):
 		"""
-		Generates negatives from a given set of positive examples.
+		Generates negatives from a given set of positive examples, adding in parameter "tp" whether the source (CS),
+		the target (CT) or both (CB) elements of the positive were corrupted.
 
 		Arguments:
 		split -- the split form which to generate negatives
@@ -699,16 +707,16 @@ class DatasetsGenerator():
 		print("Exporting train triples")
 		with open(self.results_directory + "/train.txt", "w", encoding="utf-8") as file:
 			for edge in self.graphs[split]["train"]["positive"]:
-				file.write("\t".join((edge[1], edge[0], edge[2], "1")) + "\n")
+				file.write("\t".join((edge[1], edge[0], edge[2], "1", "P")) + "\n")
 			if(include_train_negatives):
 				for edge in self.graphs[split]["train"]["negative"]:
-					file.write("\t".join((edge[1], edge[0], edge[2], "-1")) + "\n")
+					file.write("\t".join((edge[1], edge[0], edge[2], "-1", edge[3])) + "\n")
 		print("Exporting test triples")
 		with open(self.results_directory + "/test.txt", "w", encoding="utf-8") as file:
 			for edge in self.graphs[split]["test"]["positive"]:
-				file.write("\t".join((edge[1], edge[0], edge[2], "1")) + "\n")
+				file.write("\t".join((edge[1], edge[0], edge[2], "1", "P")) + "\n")
 			for edge in self.graphs[split]["test"]["negative"]:
-				file.write("\t".join((edge[1], edge[0], edge[2], "-1")) + "\n")
+				file.write("\t".join((edge[1], edge[0], edge[2], "-1", edge[3])) + "\n")
 		print("Exporting relations")
 		with open(self.results_directory + "/relations.txt", "w", encoding="utf-8") as file:
 			for rel, edges in sorted(self.grouped_edges.items(), key=lambda x: len(x[1]), reverse=True):
