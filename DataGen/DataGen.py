@@ -400,7 +400,7 @@ class DatasetsGenerator():
 			self.edges = [(self.etoint[s], self.rtoint[r], self.etoint[t]) for r, s, t in self.edges]
 			self.relations = [self.rtoint[r] for r in self.relations]
 			for e in self.entities.keys():
-				self.entities[etoint[e]] = self.entities.pop(e)
+				self.entities[self.etoint[e]] = self.entities.pop(e)
 
 			self.group_edges()
 
