@@ -2,7 +2,7 @@ from dataclasses import replace
 from itertools import combinations
 from math import floor
 import networkx as nx
-from random import random, choice
+from random import random
 import os
 from tqdm import tqdm, trange
 from bokeh.plotting import figure
@@ -11,11 +11,9 @@ from bokeh.models import ColumnDataSource, HoverTool
 from bokeh.transform import dodge
 from bokeh.embed import components
 import json
-import numpy as np
 import datetime
-from simpleTriplesReader import SimpleTriplesReader
-from NTriplesReader import NTriplesReader
-from linkedDataReader import LinkedDataReader
+from Readers import SimpleTriplesReader, NTriplesReader, LinkedDataReader
+from NegativesGenerators import PPRGenerator, RandomGenerator, NegativesGenerator
 import argparse
 
 """
@@ -40,9 +38,9 @@ bokeh_js_import = '''<link
 <script src="https://cdn.pydata.org/bokeh/release/bokeh-widgets-2.4.2.min.js"></script>
 <script src="https://cdn.pydata.org/bokeh/release/bokeh-tables-2.4.2.min.js"></script>'''
 
-class DatasetsGenerator():
+class KGDataset():
 	"""
-	Class used to generate the datasets.
+	Class used to represent the datasets.
 
 	Methods that should be used externally:
 	read -- Preprocessing: reads the knowledge graph using a reader, and performs preprocessing.
@@ -59,7 +57,7 @@ class DatasetsGenerator():
 		results_directory -- the output spliter.
 		number splits -- in case several training/set splits must be generated. Default: 1 split, corresponding to one training/set split
 		"""
-
+		self.has_encoding = False
 		self.ents_source = []
 		self.ents_target = []
 		self.entities = dict()
@@ -70,12 +68,10 @@ class DatasetsGenerator():
 		self.inverses_dict = dict()
 		self.graphs = dict()
 		self.number_splits = number_splits
-		self.ignored_rels_positives = set()
 		self.results_directory = results_directory
 		self.entity_edges = dict()
 		self.domains = dict()
 		self.ranges = dict()
-		self.candidates_cache = {source_target: {} for source_target in ("source", "target")}
 		if not os.path.exists(results_directory):
 			os.makedirs(results_directory)
 
@@ -202,46 +198,6 @@ class DatasetsGenerator():
 			if(edge[1] not in self.entity_edges):
 				self.entity_edges[edge[1]] = list()
 			self.entity_edges[edge[1]].append(edge)
-
-	def compute_PPR(self, steps, alpha=0.02):
-		"""
-		Computes the personalised page rank of every entity, using only outward edges for paths.
-
-		Arguments:
-		steps -- the number of steps of the random walks used to compute PPR. If None, defaults to 1/alpha.
-		alpha -- the teleport probability during the random walks. Increase to focus probability around each source node. Default: 0.02
-
-		Generates and stores:
-		ranks -- a matrix of size NxN where N is the number of entities. Position i,j corresponds to the probability of reaching entity j from entity i after a random walk of the given number of steps and the given teleport probability during each step.
-		"""
-
-		print("Computing movements matrix")
-		self.encode(False)
-		# We compute the matrix of movements. Each row i and column j represent a node. The entry i, j is the probability of randomly moving form node i to node j.
-		matrix_movements = np.empty([len(self.entities), len(self.entities)])
-		for entity in tqdm(self.entities):
-			source_ind = self.etoint[entity]
-			edges = self.entity_edges.get(entity, list())
-			entity_count = dict()
-			# We compute how many edges there are towards each node
-			for edge in edges:
-				target = edge[2]
-				entity_count[target] = entity_count.get(target, 0) + 1
-			for target, frequency in entity_count.items():
-				target_ind = self.etoint[target]
-				# Since all walks are equally probable, the probability is always the number of edges that go to the target node divided by the total number of outgoing edges of the node
-				matrix_movements[source_ind, target_ind] = frequency / len(edges)
-		print("Computing PPR for every entity")
-		# Steps defaults to 1/alpha
-		if steps is None:
-			steps = round(1 / alpha)
-		initial_distribution = np.identity(len(self.entities))
-		# The initial matrix represents each node as a starting point, that is, 0 steps
-		ranks = np.identity(len(self.entities))
-		# Each matrix multiplication represents a step
-		for _ in tqdm(range(steps)):
-			ranks = (1 - alpha) * np.matmul(ranks, matrix_movements) + alpha * initial_distribution
-		self.ranks = ranks
 
 	def create_summary(self, relations, amounts, accumulated_fractions):
 		"""
@@ -391,7 +347,7 @@ class DatasetsGenerator():
 		inttor -- the dictionary with integers as keys and relations as values
 
 		"""
-
+		self.has_encoding = True
 		self.etoint = {ent: i for i, ent in enumerate(self.entities.keys())}
 		self.inttoe = {i: ent for ent, i in self.etoint.items()}
 		self.rtoint = {rel: i for i, rel in enumerate(self.relations)}
@@ -498,38 +454,6 @@ class DatasetsGenerator():
 		g.add_nodes_from(entities)
 		nx.write_gexf(g, self.results_directory + "/dataset.gexf")
 
-	def generate_negatives_PPR(self, positive, number_negatives):
-		"""
-		Generates negatives from a positive using the PPR strategy, which changes the source and target while keeping the domain/range of the relation.
-		The candidates are selected from the PPR of each node, selecting a random one while weighting by PPR.
-
-		Arguments:
-		positive -- the positive to generate the negatives from
-		number_negatives -- how many negatives to generate
-
-		Returns: a list of negative edge examples.
-		"""
-		rel = positive[0]
-		# We take the rank of each existing entity for both the source and target node
-		source_ranks = self.ranks[self.etoint[positive[1]]]
-		target_ranks = self.ranks[self.etoint[positive[2]]]
-		# We take as candidates for the change the entities with a rank above 0, and which are in the range/domain of the relation
-		sources = [(self.inttoe[i], rank) for i, rank in enumerate(source_ranks) if rank > 0 and self.inttoe[i] in self.domains[rel]]
-		targets = [(self.inttoe[i], rank) for i, rank in enumerate(target_ranks) if rank > 0 and self.inttoe[i] in self.ranges[rel]]
-		# We turn the ranks into arrays of probabilities by dividing them by the sum of the original array
-		sources_probs = np.array([source[1] for source in sources])
-		sources_probs /= sources_probs.sum()
-		targets_probs = np.array([target[1] for target in targets])
-		targets_probs /= targets_probs.sum()
-		# We use the probabilities as weights to select new sources and targets
-		ids_sources = np.random.choice(len(sources_probs), number_negatives, p=sources_probs)
-		ids_targets = np.random.choice(len(targets_probs), number_negatives, p=targets_probs)
-		# We select the sources and targets, and create the negatives
-		sources = [sources[ids_sources[i]][0] for i in range(number_negatives)]
-		targets = [targets[ids_targets[i]][0] for i in range(number_negatives)]
-		negatives = [(rel, sources[i], targets[i], 'CB') for i in range(number_negatives)]
-		return negatives
-
 	def get_candidates(self, relation, source_target):
 		if(relation in self.candidates_cache[source_target]):
 			candidates = self.candidates_cache[source_target][relation]
@@ -541,109 +465,17 @@ class DatasetsGenerator():
 			self.candidates_cache[source_target][relation] = candidates
 		return candidates
 
-
-	def generate_negatives_random(self, positive, number_negatives, keep_dom_ran=True, change_source=False, change_target=True, equal_probabilities=False):
-		"""
-		Generates negatives from a positive by changing the source and/or target.
-
-		Arguments:
-		positive -- the positive to generate the negatives from.
-		number_negatives -- how many negatives to generate.
-		keep_dom_range -- whether or not to keep the domain or range when finding candidates. Default: True.
-		change_source -- whether or not to change the source when generating negative examples. Default: False.
-		change_target -- whether or not to change the target when generating negative examples. Default: True.
-		equal_probabilities -- whether or not to give the same probability to all candidates. If False, the probability depends on the number of occurrences of each entity in the relevant position of the relation. Default: False.
-
-		Returns: a list of negative edge examples.
-		"""
-
-		if(change_source and change_target):
-			tc = "CB"
-		elif(change_source):
-			tc = "CS"
-		elif(change_target):
-			tc = "CT"
-
-		rel = positive[0]
-			
-		# If we keep the domain and range, the candidates must be taken from the edges of the same relation as the positive
-		if(keep_dom_ran):
-			if(change_source):
-				candidates_source = self.get_candidates(rel, "source")
-			if(change_target):
-				candidates_target = self.get_candidates(rel, "target")
-		# Otherwise, they are taken from all edges
-		else:
-			if(change_source):
-				candidates_source = self.ents_source
-			if(change_target):
-				candidates_target = self.ents_target
-		# If every candidate is equally probable, without taking their frequency of appearance in the edges into account, we use the domain and range of each relation, where entities do not appear twice in each list
-		if(equal_probabilities):
-			if(change_source):
-				candidates_source = list(self.domains[rel])
-			if(change_target):
-				candidates_target = list(self.ranges[rel])
-		negatives = list()
-		# Loop for each generated negative. We do not generate all of them at once, in order to check failed attempts to generate negatives
-		for _ in range(number_negatives):
-			source = None
-			target = None
-			# We find a new source, if required
-			if(change_source):
-				attempts = 0
-				found = False
-				# We only try to find a new source in 20 attempts. We assume it is not possible if surpassed (all candidates are equal to the original, and thus we can not change it)
-				while not found and len(candidates_source) > 1 and attempts <= 20:
-					# After 10 attempts, it is difficult to find a new source. The original could be very frequent. We make all probabilities equal
-					if(attempts > 10):
-						if(keep_dom_ran):
-							candidates_source = list(self.domains[rel])
-						else:
-							candidates_source = list(self.entities.keys())
-					attempts += 1
-					# We take the new source among the candidates
-					source = choice(candidates_source)
-					# The attempt is only successful if the new source is different from the original one
-					found = source != positive[1]
-					if not found:
-						source = None
-			# If not required, the source remains the same
-			else:
-				source = positive[1]
-			# Finding a new target, if required. The process is the same as with the source
-			if(change_target):
-				attempts = 0
-				found = False
-				while not found and len(candidates_target) > 1 and attempts <= 20:
-					if(attempts > 10):
-						if(keep_dom_ran):
-							candidates_target = list(self.ranges[rel])
-						else:
-							candidates_target = list(self.entities.keys())
-					attempts += 1
-					target = choice(candidates_target)
-					found = target != positive[2]
-					if not found:
-						target = None
-			else:
-				target = positive[2]
-			# We only add the negative if both the source and target changes, if required, were successful
-			if(not (change_source and source is None) and not (change_target and target is None)):
-				negatives.append((rel, source, target, tc))
-		return negatives
-
-	def generate_negatives(self, split, train_test, negatives_factor, strategy, clean_before=True, reject_rel_after_failure=False):
+	#TODO Completar este método
+	def generate_negatives(self, split:int, train_test:str, generators_and_number:dict[NegativesGenerator,], clean_before=False, reject_rel_after_failure=False):
 		"""
 		Generates negatives from a given set of positive examples, adding in parameter "tp" whether the source (CS),
 		the target (CT) or both (CB) elements of the positive were corrupted.
 
 		Arguments:
 		split -- the split form which to generate negatives
-		train_test -- whether to generate negatives form the training or testing set
-		negatives_factor -- how many negatives will be generated per positive. Decimals indicate the probability of the final negative example
-		strategy -- the negatives generation strategy.
-		clean_before -- whether or not remove existing negative examples for the given set, if there are any. Default: True
+		train_test -- whether to generate negatives from the training or testing set
+		generators_and_number -- a dictionary containing negatives negerators as keys and the numbers of negatives to generate for each one as values
+		clean_before -- whether or not remove existing negative examples for the given set, if there are any. Default: False
 		reject_rel_after_failute -- whether or not ignore a relation if an attempt to generate negative examples form a positive of the relation is unable to find any, which should mean that there is only one candidate
 		"""
 
@@ -656,35 +488,20 @@ class DatasetsGenerator():
 		negatives = list()
 		with tqdm(edges) as pbar:
 			for positive in pbar:
-				# If a relation as been marked as "to be ignored", we skip the negatives generation. Relations are marked as such if it is impossible to generate negatives for a positive example
-				if(positive[0] not in self.ignored_rels_positives):
-					num_negatives = int(negatives_factor)
-					if(negatives_factor % 1 != 0):
-						if(random() < (negatives_factor % 1)):
-							num_negatives += 1
-					# We create the negatives using the specified strategy
-					if(strategy == "change_source"):
-						new_negatives = self.generate_negatives_random(positive, num_negatives, True, True, False)
-					elif(strategy == "change_target"):
-						new_negatives = self.generate_negatives_random(positive, num_negatives, True, False, True)
-					elif(strategy == "change_both"):
-						new_negatives = self.generate_negatives_random(positive, num_negatives, True, True, True)
-					elif(strategy == "change_source_random"):
-						new_negatives = self.generate_negatives_random(positive, num_negatives, False, True, False)
-					elif(strategy == "change_target_random"):
-						new_negatives = self.generate_negatives_random(positive, num_negatives, False, False, True)
-					elif(strategy == "change_both_random"):
-						new_negatives = self.generate_negatives_random(positive, num_negatives, False, True, True)
-					elif(strategy == "PPR"):
-						new_negatives = self.generate_negatives_PPR(positive, num_negatives)
-					# If the generation of negatives was succesful, we add them to the set of negatives
-					if(len(new_negatives)) > 0:
-						negatives.extend(new_negatives)
-					# Otherwise, if the option is toggled, we mark the relation so that there are no more attempts to generate negatives from its instances
-					elif(reject_rel_after_failure):
-						self.ignored_rels_positives.add(positive[0])
-						pbar.write(f'Ignoring relation {positive[0]}: returned no negatives in an attempt')
-						pbar.refresh()
+					for generator, num_negatives in generators_and_number.items():
+						ignored_rels_positives = set()
+						# If a relation as been marked as "to be ignored", we skip the negatives generation. Relations are marked as such if it is impossible to generate negatives for a positive example
+						if(positive[0] not in ignored_rels_positives):
+							new_negatives = generator.generate_negatives(positive, num_negatives)
+							# If the generation of negatives was succesful, we add them to the set of negatives
+							if(len(new_negatives)) > 0:
+								negatives.extend(new_negatives)
+							# Otherwise, if the option is toggled, we mark the relation so that there are no more attempts to generate negatives from its instances
+							elif(reject_rel_after_failure):
+								ignored_rels_positives.add(positive[0])
+								pbar.write(f'Ignoring relation {positive[0]}: returned no negatives in an attempt')
+							pbar.refresh()
+					
 		self.graphs[split][train_test]["negative"] = negatives
 
 	def export_files(self, split, include_train_negatives, include_dataproperties, include_types):
@@ -740,6 +557,44 @@ class DatasetsGenerator():
 			with open(self.results_directory + "/types.json", "w", encoding="utf-8") as file:
 				json.dump(types, file)
 
+def generate_datasets(	input_file,
+				 		input_format, 
+						output_folder, 
+						graph_fraction, 
+						generate_negatives_training, 
+						remove_inverses, 
+						min_num_rel, 
+						reach_fraction, 
+						testing_fraction, 
+						negatives_generators,
+						export_gexf,
+						create_summary,
+						inverse_threshold,
+						include_data_prop,
+						separate_types):
+	# We read and preprocess the graph
+	if(input_format == "nt"):
+		reader = NTriplesReader(input_file, graph_fraction, include_data_prop)
+	elif(input_format in ["rdfa", "nt", "n3", "xml", "trix"]):
+		reader = LinkedDataReader(input_file, graph_fraction, include_data_prop, input_format)
+	else:
+		reader = SimpleTriplesReader(input_file, '\t', graph_fraction)
+	kgd = KGDataset(output_folder)
+	print(output_folder)
+	kgd.read(reader, inverse_threshold=inverse_threshold, min_num_rel=min_num_rel, reach_fraction=reach_fraction, remove_inverses=remove_inverses, create_summary=create_summary, separate_types=separate_types)
+	# We split the graph
+	kgd.split_graph(testing_fraction)
+	# We generate the negatives
+	for generator in negatives_generators:
+		generator.setKG(kgd)
+		generator.initialize()
+	kgd.generate_negatives(0, "test", negatives_generators, True, False)
+	if(generate_negatives_training):
+		kgd.generate_negatives(0, "train", negatives_generators, True, False)
+	# We export the files
+	kgd.export_files(0, True, include_data_prop, separate_types)
+	if(export_gexf):
+		kgd.export_gexf(0, True, True, True, True)
 
 def main():
 	parser = argparse.ArgumentParser(prog="AYNEC DataGen", fromfile_prefix_chars='@', description='Generates evaluation datasets from knowledge graphs.')
@@ -755,8 +610,16 @@ def main():
 	parser.add_argument('--notCreateSum', action='store_false', help='Specify if you do not want to create an html summary of the relations frequency and the entities degree')
 	parser.add_argument('--computePPR', action='store_true', help='Specify to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used')
 	parser.add_argument('--fractionTest', type=float, default=0.2, help='Fraction of the edges used for testing')
-	parser.add_argument('--numNegatives', type=int, default=1, help='Number of negatives to generate per positive')
-	parser.add_argument('--negStrategy', default='change_target', help='Strategy used to generate negatives', choices=['change_target', 'change_source', 'change_both', 'change_target_random', 'change_source_random', 'change_both_random', 'PPR'])
+	
+	parser.add_argument('--change_target_kr', type=int, help='Generate the specified amount of negatives using the change target while keeping the range of the relations strategy')
+	parser.add_argument('--change_source_kd', type=int, help='Generate the specified amount of negatives using the change source while keeping the domain of the relations strategy')
+	parser.add_argument('--change_both_kdr', type=int, help='Generate the specified amount of negatives using the change both source and target while keeping the domain/range of the relations strategy')
+	parser.add_argument('--change_target_random', type=int, help='Generate the specified amount of negatives using the change target at random strategy')
+	parser.add_argument('--change_source_random', type=int, help='Generate the specified amount of negatives using the change source at random strategy')
+	parser.add_argument('--change_both_random', type=int, help='Generate the specified amount of negatives using the change source at random strategy')
+	parser.add_argument('--change_both_PPR', type=int, help='Generate the specified amount of negatives using the PPR strategy')
+	
+	
 	parser.add_argument('--notNegTraining', action='store_false', help='Specify if negatives should not be generated for the training set. If False, they are only generated for the testing set')
 	parser.add_argument('--notExportGEXF', action='store_false', help='Specify if the dataset should not be exported as a gexf file, useful for visualisation')
 	parser.add_argument('--excludeDataProp', action='store_true', help='Specify if the dataset should not include a file with the data properties associated to entities')
@@ -773,39 +636,42 @@ def main():
 	MIN_NUM_REL = args.minNumRel
 	REACH_FRACTION = args.reachFraction
 	TESTING_FRACTION = args.fractionTest
-	NUMBER_NEGATIVES = args.numNegatives
-	NEGATIVES_STRATEGY = args.negStrategy
+	GENERATORS = {}
+	if(args.change_target_kr is not None):
+		GENERATORS[RandomGenerator(True, False, True)] = args.change_target_kr
+	if(args.change_source_kd is not None):
+		GENERATORS[RandomGenerator(True, True, False)] = args.change_source_kd
+	if(args.change_both_kdr is not None):
+		GENERATORS[RandomGenerator(True, True, True)] = args.change_both_kdr
+	if(args.change_target_random is not None):
+		GENERATORS[RandomGenerator(False, False, True)] = args.change_target_kr
+	if(args.change_source_random is not None):
+		GENERATORS[RandomGenerator(False, True, False)] = args.change_source_kd
+	if(args.change_both_random is not None):
+		GENERATORS[RandomGenerator(False, True, True)] = args.change_both_kdr
+	if(args.change_both_PPR is not None):
+		GENERATORS[PPRGenerator()] = args.change_both_PPR
 	EXPORT_GEXF = args.notExportGEXF
 	CREATE_SUMMARY = args.notCreateSum
-	COMPUTE_PPR = args.computePPR
 	INVERSE_THRESHOLD = args.thresInv
 	INCLUDE_DATA_PROP = not args.excludeDataProp
 	SEPARATE_TYPES = args.separateTypes
-	print(OUTPUT_FOLDER)
 
-	# We read and preprocess the graph
-	if(INPUT_FORMAT == "nt"):
-		reader = NTriplesReader(INPUT_FILE, GRAPH_FRACTION, INCLUDE_DATA_PROP)
-	elif(INPUT_FORMAT in ["rdfa", "nt", "n3", "xml", "trix"]):
-		reader = LinkedDataReader(INPUT_FILE, GRAPH_FRACTION, INCLUDE_DATA_PROP, INPUT_FORMAT)
-	else:
-		reader = SimpleTriplesReader(INPUT_FILE, '\t', GRAPH_FRACTION)
-	generator = DatasetsGenerator(OUTPUT_FOLDER)
-	print(OUTPUT_FOLDER)
-	generator.read(reader, inverse_threshold=INVERSE_THRESHOLD, min_num_rel=MIN_NUM_REL, reach_fraction=REACH_FRACTION, remove_inverses=REMOVE_INVERSES, create_summary=CREATE_SUMMARY, separate_types=SEPARATE_TYPES)
-	# We compute the PPR matrix (quite time-consuming)
-	if(COMPUTE_PPR):
-		generator.compute_PPR(5)
-	# We split the graph
-	generator.split_graph(TESTING_FRACTION)
-	# We generate the negatives
-	generator.generate_negatives(0, "test", NUMBER_NEGATIVES, NEGATIVES_STRATEGY, True, False)
-	if(GENERATE_NEGATIVES_TRAINING):
-		generator.generate_negatives(0, "train", NUMBER_NEGATIVES, NEGATIVES_STRATEGY, True, False)
-	# We export the files
-	generator.export_files(0, True, INCLUDE_DATA_PROP, SEPARATE_TYPES)
-	if(EXPORT_GEXF):
-		generator.export_gexf(0, True, True, True, True)
+	generate_datasets(	INPUT_FILE,
+						INPUT_FORMAT,
+						OUTPUT_FOLDER,
+						GRAPH_FRACTION,
+						GENERATE_NEGATIVES_TRAINING,
+						REMOVE_INVERSES,
+						MIN_NUM_REL,
+						REACH_FRACTION,
+						TESTING_FRACTION,
+						GENERATORS,
+						EXPORT_GEXF,
+						CREATE_SUMMARY,
+						INVERSE_THRESHOLD,
+						INCLUDE_DATA_PROP,
+						SEPARATE_TYPES)
 
 if __name__ == '__main__':
 	main()
