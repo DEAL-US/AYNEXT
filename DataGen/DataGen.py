@@ -391,7 +391,7 @@ class KGDataset():
 			# We take a fraction of the edges of each relation
 			for rel in tqdm(self.relations):
 				# We take the edges of the current relation
-				edges = [(rel, s, t) for s, t in self.grouped_edges[rel]]
+				edges = [(rel, s, t, 'P') for s, t in self.grouped_edges[rel]]
 				# Different splits use different offsets for the edges that are taken for testing
 				offset = floor(len(edges) / self.number_splits * i)
 				# We take the fraction for the current relation
@@ -524,14 +524,14 @@ class KGDataset():
 		print("Exporting train triples")
 		with open(self.results_directory + "/train.txt", "w", encoding="utf-8") as file:
 			for edge in self.graphs[split]["train"]["positive"]:
-				file.write("\t".join((edge[1], edge[0], edge[2], "1", "P")) + "\n")
+				file.write("\t".join((edge[1], edge[0], edge[2], "1", edge[3])) + "\n")
 			if(include_train_negatives):
 				for edge in self.graphs[split]["train"]["negative"]:
 					file.write("\t".join((edge[1], edge[0], edge[2], "-1", edge[3])) + "\n")
 		print("Exporting test triples")
 		with open(self.results_directory + "/test.txt", "w", encoding="utf-8") as file:
 			for edge in self.graphs[split]["test"]["positive"]:
-				file.write("\t".join((edge[1], edge[0], edge[2], "1", "P")) + "\n")
+				file.write("\t".join((edge[1], edge[0], edge[2], "1", edge[3])) + "\n")
 			for edge in self.graphs[split]["test"]["negative"]:
 				file.write("\t".join((edge[1], edge[0], edge[2], "-1", edge[3])) + "\n")
 		print("Exporting relations")
