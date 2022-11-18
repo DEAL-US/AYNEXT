@@ -16,11 +16,11 @@ SOURCE_QUERY -- Whether or not use the query <?, relation, target> to compute ra
 ALPHA -- The significance threshold for the rejection of a null hypothesis. Only used for console messages.
 """
 
-RESULTS_FILE = "./mockup-results.txt"
+RESULTS_FILE = "ResTest/mockup-results.txt"
 
-METRICS_OUTPUT_FILE = "./mockup-metrics.csv"
+METRICS_OUTPUT_FILE = "ResTest/mockup-metrics.csv"
 
-PVALUES_OUTPUT_FILE = "./mockup-pvalues.csv"
+PVALUES_OUTPUT_FILE = "ResTest/mockup-pvalues.csv"
 
 THRESHOLDS = [0.3]
 
@@ -51,10 +51,10 @@ for technique in techniques:
 			metrics[technique][threshold][rel]["TN"] = 0
 			metrics[technique][threshold][rel]["FN"] = 0
 
-RRs = {technique: {rel: [] for rel in rels} for technique in techniques}
-APs = {technique: {rel: [] for rel in rels} for technique in techniques}
+RRs = {technique:{"CS":{rel: [] for rel in rels}, "CT":{rel: [] for rel in rels}}  for technique in techniques}
+APs = {technique:{"CS":{rel: [] for rel in rels}, "CT":{rel: [] for rel in rels}} for technique in techniques}
 
-def update_rr_ap(grouped):
+def update_rr_ap(grouped, n_type):
 	for key, value in grouped.items():
 		positives = value[value["gt"] == 1]
 		numPositives = len(positives)
@@ -76,31 +76,47 @@ def update_rr_ap(grouped):
 					# AP is computed from the first N results, where N is the number of true positives
 					if(i < numPositives):
 						ap += TP / (i + 1)
-				RRs[technique][rel].append(rr)
-				APs[technique][rel].append(ap / numPositives)
+				RRs[technique][n_type][rel].append(rr)
+				APs[technique][n_type][rel].append(ap / numPositives)
 
 # MRR and MAP from target queries, grouping by source and relation
 if(TARGET_QUERY):
-	grouped = dict(tuple(results.groupby(["source", "relation"])[["target", "gt"] + techniques]))
-	update_rr_ap(grouped)
+	rows = results[results["type"].isin(("P", "CT"))]
+	grouped = dict(tuple(rows.groupby(["source", "relation"])[["target", "gt"] + techniques]))
+	update_rr_ap(grouped, "CT")
 
 # MRR and MAP from source queries, grouping by target and relation
 if(SOURCE_QUERY):
-	grouped = dict(tuple(results.groupby(["target", "relation"])[["source", "gt"] + techniques]))
-	update_rr_ap(grouped)
+	rows = results[results["type"].isin(("P", "CS"))]
+	grouped = dict(tuple(rows.groupby(["target", "relation"])[["source", "gt"] + techniques]))
+	update_rr_ap(grouped, "CS")
 
 for technique in techniques:
 	for rel in rels:
-		mrr = np.mean(RRs[technique][rel])
-		MAP = np.mean(APs[technique][rel])
-		if(np.isnan(mrr)):
-			mrr = None
-		if(np.isnan(MAP)):
-			MAP = None		
-		metrics[technique][-1][rel]["MRR"] = mrr
-		metrics[technique][-1][rel]["MAP"] = MAP
-		lines_metrics.append((technique, -1, rel, "MRR", mrr))
-		lines_metrics.append((technique, -1, rel, "MAP", MAP))
+		if(SOURCE_QUERY):
+			mrr_cs = np.mean(RRs[technique]["CS"][rel])
+			map_cs = np.mean(APs[technique]["CS"][rel])
+			if(np.isnan(mrr_cs)):
+				mrr_cs = None
+			if(np.isnan(map_cs)):
+				map_cs = None
+			metrics[technique][-1][rel]["CS"]["MRR"] = mrr_cs
+			metrics[technique][-1][rel]["CS"]["MAP"] = map_cs
+			lines_metrics.append((technique, -1, rel, "MRR_CS", mrr_cs))
+			lines_metrics.append((technique, -1, rel, "MAP_CS", map_cs))
+		if(TARGET_QUERY):
+			mrr_ct = np.mean(RRs[technique]["CT"][rel])	
+			map_ct = np.mean(APs[technique]["CT"][rel])
+			if(np.isnan(mrr_ct)):
+				mrr_ct = None
+			if(np.isnan(map_ct)):
+				map_cs = None	
+		
+			metrics[technique][-1][rel]["CT"]["MRR"] = mrr_ct
+			metrics[technique][-1][rel]["CT"]["MAP"] = map_ct
+
+		
+		lines_metrics.append((technique, -1, rel, "MRR_CT", mrr_cs))
 
 	MRRs = list(filter(None.__ne__, [metrics[technique][-1][rel]["MRR"] for rel in rels]))
 	MAPs = list(filter(None.__ne__, [metrics[technique][-1][rel]["MAP"] for rel in rels]))
