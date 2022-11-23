@@ -114,15 +114,20 @@ for technique in techniques:
 		
 			metrics[technique][-1][rel]["CT"]["MRR"] = mrr_ct
 			metrics[technique][-1][rel]["CT"]["MAP"] = map_ct
+			lines_metrics.append((technique, -1, rel, "MRR_CT", mrr_cs))
+			lines_metrics.append((technique, -1, rel, "MAP_CT", mrr_cs))
 
-		
-		lines_metrics.append((technique, -1, rel, "MRR_CT", mrr_cs))
+	if(SOURCE_QUERY):
+		MRR_CSs = list(filter(None.__ne__, [metrics[technique][-1][rel]["CS"]["MRR"] for rel in rels]))
+		MAP_CSs = list(filter(None.__ne__, [metrics[technique][-1][rel]["CS"]["MAP"] for rel in rels]))
+		metrics[technique][-1]["MRR_CSs"] = MRR_CSs
+		metrics[technique][-1]["MAP_CSs"] = MAP_CSs
 
-	MRRs = list(filter(None.__ne__, [metrics[technique][-1][rel]["MRR"] for rel in rels]))
-	MAPs = list(filter(None.__ne__, [metrics[technique][-1][rel]["MAP"] for rel in rels]))
-
-	metrics[technique][-1]["MRRs"] = MRRs
-	metrics[technique][-1]["MAPs"] = MAPs
+	if(TARGET_QUERY):
+		MRR_CTs = list(filter(None.__ne__, [metrics[technique][-1][rel]["CT"]["MRR"] for rel in rels]))
+		MAP_CTs = list(filter(None.__ne__, [metrics[technique][-1][rel]["CT"]["MAP"] for rel in rels]))
+		metrics[technique][-1]["MRR_CTs"] = MRR_CSs
+		metrics[technique][-1]["MAP_CTs"] = MAP_CSs
 
 # Computing the confusion matrix
 for index, row in results.iterrows():

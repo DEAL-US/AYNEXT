@@ -42,11 +42,15 @@ The DataGen tool takes as input a knowledge graph file as input and generates tr
 --notCreateSum: Specify if you do not want to create an html summary of the relations frequency and the entities degree.\
 --computePPR: Specify to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used.\
 --fractionTest: Fraction of the edges used for testing. Default = 0.2.\
---numNegatives: Number of negatives to generate per positive. Default = 1.\
---negStrategy: Strategy used to generate negatives. Choices: 'change_target', 'change_source', 'change_both_random', 'change_target_random', 'change_source_random', 'change_both_random', 'PPR'.\
+--change_target_kr: Generate the specified amount of negatives using the change target while keeping the range of the relations strategy.\
+--change_source_kd: Generate the specified amount of negatives using the change source while keeping the domain of the relations strategy.\
+--change_both_kdr: Generate the specified amount of negatives using the change both source and target while keeping the domain/range of the relations strategy.\
+--change_target_random: Generate the specified amount of negatives using the change target at random strategy.\
+--change_source_random: Generate the specified amount of negatives using the change source at random strategy.\
+--change_both_random: Generate the specified amount of negatives using the change source at random strategy.\
+--change_both_PPR: Generate the specified amount of negatives using the PPR strategy.\
 --notNegTraining: Specify ig negatives should not be generated for the training set. If False, they are only generated for the testing set.\
 --notExportGEXF: Specify if the dataset should not be exported as a gexf file, useful for visualisation.\
-
 
 The next section describe how the steps of the workflow can be customised.
 
@@ -55,17 +59,17 @@ The next section describe how the steps of the workflow can be customised.
 Let us suppose that we want to generate an evaluation dataset from the WN11 file, which contains a triple in each line. We want to use 20% of the dataset for testing, generating 2 negatives per positive by randomly replacing the source entity of the positive triples, removing relations with less than 10 instances, removing inverses with an overlapping threshold of 0.9. We would place the file in the same folder as DataGen.py and run the following command line:
 
 ```
-python DataGen.py --inF ./WN11.txt --outF ./WN11-dataset --minNumRel 10 --removeInv --numNegatives 2 --negStrategy change_source_random
+python DataGen.py --inF ./WN11.txt --outF ./WN11-dataset --minNumRel 10 --removeInv --change_source_random 2
 ```
 
 Let us now suppose that we want to generate an evaluation dataset from a rdf graph in a file named "wikidata.rdf". We want to use 50% of the dataset for testing, but without generating negatives. We want to remove relations with less than 30 instances and only keep relations that cover 90% of the graph. We also want to remove inverses want to remove inverses with an overlapping threshold of 0.95. We don't want to generate the .gexf file. Finally, since the original file is large, we only want to use aroung 75% of its triples. We would run the following command: 
 
 ```
-python DataGen.py --inF ./wikidata.rdf --outF ./wikidata-dataset --format rdf --fractionAll 0.75 --minNumRel 30 --reachFraction 0.9 --removeInv --thresInv 0.95 --fractionTest 0.5 --numNegatives 0 --notExportGEXF
+python DataGen.py --inF ./wikidata.rdf --outF ./wikidata-dataset --format rdf --fractionAll 0.75 --minNumRel 30 --reachFraction 0.9 --removeInv --thresInv 0.95 --fractionTest 0.5 --notExportGEXF
 ```
 
 ### Preprocessing
-The basic data reading is performed by the "read" function of a class that extends the Reader class. The provided implementation reads a file with a triple in each line, or a rdf file.
+The basic data reading is performed by the "read" function of classes that extends the Reader class.
 
 The preprocessing itself, however, is performed in the read function of the DatasetsGenerator class, which has most parameters relevant to preprocessing.
 
@@ -133,7 +137,7 @@ for i in trange(self.number_splits):
  
  ### Negatives generation
  
-The generation of negative examples is performed in function generate_negatives. This function iterates over every positive in every testing set and delegates the generation of a number of negatives to functions that represent different strategies. Note that there is a filter of the positive examples used to generate negative examples:
+The generation of negative examples is performed by the generate_negatives function of classes that extend the NegativesGenerator class. These are used by the generate_negatives function of the KGDataset class, which iterates over every positive in every testing set and delegates the generation of a number of negatives to negatives generators that represent different strategies. Note that there is a filter of the positive examples used to generate negative examples:
 
 ```python
 if(positive[0] not in self.ignored_rels_positives):
@@ -141,7 +145,7 @@ if(positive[0] not in self.ignored_rels_positives):
 
 self.ignored_rels_positives is an initially empty list where we store relations that are ignored. We include a relation in this list when it is impossible to generate any negative from a positive of the relation. This happens, for example, when we want to generate negatives by changing the target of a triple to another entity while keeping the range of the relation, but all instances of the relation have the same target. Adding this check makes it possible to quickly discard such relations. This option, however, can be toggled.
 
-The generation of negatives themselves takes place in functions that take as arguments, at the very least, the positive and the number of negatives to generate. Once such function is defined, it can be included as an additional strategy. For example, let us suppose that we want to implement a negatives generation strategy that merely replaces the source of the triple with a fictional entity named "foo", and the target with a fictional entity named "bar". We would define the following function:
+The generation of negatives themselves takes place in generate_negatives functions of generator classes that take as arguments the positive and the number of negatives to generate, with additional parameters being provided during initialization. Once such generator is defined, it can be included as an additional strategy. For example, let us suppose that we want to implement a negatives generation strategy that merely replaces the source of the triple with a fictional entity named "foo", and the target with a fictional entity named "bar". We would define the following function:
 
 ```python
 def generate_negatives_foobar(self, positive, number_negatives):
@@ -149,28 +153,6 @@ def generate_negatives_foobar(self, positive, number_negatives):
 	negatives = [(rel, "foo", "bar") for i in range(number_negatives)]
 	return negatives
  ```
- 
- And it could be included with other strategies:
- 
- ```python
-	...
-	if(strategy == "change_source"):
-		new_negatives = self.generate_negatives_random(positive, num_negatives, True, True, False)
-	elif(strategy == "change_target"):
-		new_negatives = self.generate_negatives_random(positive, num_negatives, True, False, True)
-	elif(strategy == "change_both"):
-		new_negatives = self.generate_negatives_random(positive, num_negatives, True, True, True)
-	elif(strategy == "change_source_random"):
-		new_negatives = self.generate_negatives_random(positive, num_negatives, False, True, False)
-	elif(strategy == "change_target_random"):
-		new_negatives = self.generate_negatives_random(positive, num_negatives, False, False, True)
-	elif(strategy == "change_both_random"):
-		new_negatives = self.generate_negatives_random(positive, num_negatives, False, True, True)
-	elif(strategy == "PPR"):
-		new_negatives = self.generate_negatives_PPR(positive, num_negatives)
-	elif(strategy == "foobar"):
-		new_negatives = self.generate_negatives_foobar(positive, num_negatives)
-```
 
 ## ResTest
 

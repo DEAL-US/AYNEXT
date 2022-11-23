@@ -465,7 +465,6 @@ class KGDataset():
 			self.candidates_cache[source_target][relation] = candidates
 		return candidates
 
-	#TODO Completar este método
 	def generate_negatives(self, split:int, train_test:str, generators_and_number:dict[NegativesGenerator,], clean_before=False, reject_rel_after_failure=False):
 		"""
 		Generates negatives from a given set of positive examples, adding in parameter "tp" whether the source (CS),
