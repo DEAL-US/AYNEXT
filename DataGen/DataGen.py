@@ -643,11 +643,11 @@ def main():
 	if(args.change_both_kdr is not None):
 		GENERATORS[RandomGenerator(True, True, True)] = args.change_both_kdr
 	if(args.change_target_random is not None):
-		GENERATORS[RandomGenerator(False, False, True)] = args.change_target_kr
+		GENERATORS[RandomGenerator(False, False, True)] = args.change_target_random
 	if(args.change_source_random is not None):
-		GENERATORS[RandomGenerator(False, True, False)] = args.change_source_kd
+		GENERATORS[RandomGenerator(False, True, False)] = args.change_source_random
 	if(args.change_both_random is not None):
-		GENERATORS[RandomGenerator(False, True, True)] = args.change_both_kdr
+		GENERATORS[RandomGenerator(False, True, True)] = args.change_both_random
 	if(args.change_both_PPR is not None):
 		GENERATORS[PPRGenerator()] = args.change_both_PPR
 	EXPORT_GEXF = args.notExportGEXF
