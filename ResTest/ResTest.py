@@ -31,7 +31,7 @@ SOURCE_QUERY = True
 ALPHA = 0.05
 
 results = pd.read_table(RESULTS_FILE, '\t', header=0)
-techniques = list(results.columns[4:])
+techniques = list(results.columns[5:])
 metrics = dict()
 rels = set(results["relation"])
 lines_metrics = []
@@ -42,6 +42,8 @@ for technique in techniques:
 	metrics[technique][-1] = dict()
 	for rel in rels:
 		metrics[technique][-1][rel] = dict()
+		metrics[technique][-1][rel]["CS"] = dict()
+		metrics[technique][-1][rel]["CT"] = dict()
 	for threshold in THRESHOLDS:
 		metrics[technique][threshold] = dict()
 		for rel in rels:
@@ -50,6 +52,8 @@ for technique in techniques:
 			metrics[technique][threshold][rel]["FP"] = 0
 			metrics[technique][threshold][rel]["TN"] = 0
 			metrics[technique][threshold][rel]["FN"] = 0
+			metrics[technique][threshold][rel]["CS"] = dict()
+			metrics[technique][threshold][rel]["CT"] = dict()
 
 RRs = {technique:{"CS":{rel: [] for rel in rels}, "CT":{rel: [] for rel in rels}}  for technique in techniques}
 APs = {technique:{"CS":{rel: [] for rel in rels}, "CT":{rel: [] for rel in rels}} for technique in techniques}

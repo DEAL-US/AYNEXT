@@ -32,7 +32,6 @@ class AllRandom(Technique):
     def score(self,source, target, relation) -> float:
         return round(random(), 2)
 
-
 dataset_file = '../DataGen/WN11-dataset/test.txt'
 output_file = './mockup-results.txt'
 
