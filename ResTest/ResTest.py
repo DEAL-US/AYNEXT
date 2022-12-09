@@ -97,7 +97,12 @@ if(SOURCE_QUERY):
 
 for technique in techniques:
 	for rel in rels:
+		C_s = len(results[(results["type"]=="CS") & (results["relation"]==rel)])
+		C_o = len(results[(results["type"]=="CT") & (results["relation"]==rel)])
+		r_s = []
+		r_o = []
 		if(SOURCE_QUERY):
+			r_s = np.array([1/rr for rr in RRs[technique]["CS"][rel]])
 			mrr_cs = np.mean(RRs[technique]["CS"][rel])
 			map_cs = np.mean(APs[technique]["CS"][rel])
 			if(np.isnan(mrr_cs)):
@@ -109,17 +114,25 @@ for technique in techniques:
 			lines_metrics.append((technique, -1, rel, "MRR_CS", mrr_cs))
 			lines_metrics.append((technique, -1, rel, "MAP_CS", map_cs))
 		if(TARGET_QUERY):
+			r_o = np.array([1/rr for rr in RRs[technique]["CT"][rel]])
 			mrr_ct = np.mean(RRs[technique]["CT"][rel])	
 			map_ct = np.mean(APs[technique]["CT"][rel])
 			if(np.isnan(mrr_ct)):
 				mrr_ct = None
 			if(np.isnan(map_ct)):
 				map_cs = None	
-		
 			metrics[technique][-1][rel]["CT"]["MRR"] = mrr_ct
 			metrics[technique][-1][rel]["CT"]["MAP"] = map_ct
 			lines_metrics.append((technique, -1, rel, "MRR_CT", mrr_cs))
 			lines_metrics.append((technique, -1, rel, "MAP_CT", mrr_cs))
+
+		sum_r_s = np.sum(C_s*np.log(r_s)) if len(r_s==0) else 0
+		sum_r_o = np.sum(C_o*np.log(r_o)) if len(r_o==0) else 0
+
+		wmr = np.exp((sum_r_s+sum_r_o)/(len(r_s)*C_s+len(r_o)*C_o))
+
+		metrics[technique][-1][rel]["WMR"] = wmr
+		lines_metrics.append((technique, -1, rel, "WMR", wmr))
 
 	if(SOURCE_QUERY):
 		MRR_CSs = list(filter(None.__ne__, [metrics[technique][-1][rel]["CS"]["MRR"] for rel in rels]))
@@ -132,6 +145,9 @@ for technique in techniques:
 		MAP_CTs = list(filter(None.__ne__, [metrics[technique][-1][rel]["CT"]["MAP"] for rel in rels]))
 		metrics[technique][-1]["MRR_CTs"] = MRR_CSs
 		metrics[technique][-1]["MAP_CTs"] = MAP_CSs
+
+	WMRs = list(filter(None.__ne__, [metrics[technique][-1][rel]["WMR"] for rel in rels]))
+	metrics[technique][-1]["WMRs"] = WMRs
 
 # Computing the confusion matrix
 for index, row in results.iterrows():
@@ -247,7 +263,11 @@ for technique in techniques:
 		lines_metrics.append((technique, threshold, "micro-average", "f1", metrics[technique][threshold]["micro-average"]["f1"]))
 
 pvalues = dict()
-pvalues_metrics = ["precisions", "recalls", "f1s", "MRRs", "MAPs"]
+pvalues_metrics = ["precisions", "recalls", "f1s", "WMRs"]
+if(SOURCE_QUERY):
+	pvalues_metrics.extend(("MRR_CSs", "MAP_CSs"))
+if(TARGET_QUERY):
+	pvalues_metrics.extend(("MRR_CTs", "MAP_CTs"))
 THRESHOLDS.append(-1)
 
 # Computing the p-values
@@ -265,19 +285,23 @@ for threshold in THRESHOLDS:
 					p_wilcoxon = None
 					pvalues[threshold][metric][(t0[0], t1[0])] = dict()
 					if(len(t0[1]) == 0):
-						print(f'* There were no samples for technique {t0[0]}, skipping test')
+						print(f'* There were no samples for technique {t0[0]} and metric {metric}, skipping test')
 					elif(len(t1[1]) == 0):
-						print(f'* There were no samples for technique {t1[0]}, skipping test')
+						print(f'* There were no samples for technique {t1[0]} and metric {metric}, skipping test')
 					else:
 						p_ks_2samp = ks_2samp(t0[1], t1[1]).pvalue
-						print(f'* Two samples KS (unpaired) for threshold {threshold}, {t0[0]}-{t1[0]}: {p_ks_2samp}')
+						print(f'* Two samples KS (unpaired) for threshold {threshold} metric {metric}, {t0[0]}-{t1[0]}: {p_ks_2samp}')
 						if(p_ks_2samp < ALPHA):
 							print("There are significant differences (unpaired)")
 						else:
-							print("There are NOT significant differences (unpaired")
+							print("There are NOT significant differences (unpaired)")
 						if(len(t0[1]) == len(t1[1])):
-							p_wilcoxon = wilcoxon(t0[1], t1[1]).pvalue
-							print(f'* Two samples Wilcoxon (paired) for threshold {threshold}, {t0[0]}-{t1[0]}: {p_wilcoxon}')
+							p_wilcoxon = 1.0
+							try:
+								p_wilcoxon = wilcoxon(t0[1], t1[1]).pvalue
+							except ValueError:
+								print("Value error when computing Wilcoxon test. Probably caused by exactly similar distributions.")
+							print(f'* Two samples Wilcoxon (paired) for threshold {threshold} metric {metric}, {t0[0]}-{t1[0]}: {p_wilcoxon}')							
 							if(p_wilcoxon < ALPHA):
 								print("There are significant differences (paired)")
 					pvalues[threshold][metric][(t0[0], t1[0])]["KS"] = p_ks_2samp

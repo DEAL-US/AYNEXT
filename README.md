@@ -42,6 +42,8 @@ The DataGen tool takes as input a knowledge graph file as input and generates tr
 --notCreateSum: Specify if you do not want to create an html summary of the relations frequency and the entities degree.\
 --computePPR: Specify to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used.\
 --fractionTest: Fraction of the edges used for testing. Default = 0.2.\
+--splittingTechnique: Algorithm employed to generate train/test splits out of the graph. Choices: 'random','statistical'. Default = 'random'.\
+--pValueThreshold: Threshold value for distribution comparation in statistical graph splitting technique. Default = 0.05.\
 --change_target_kr: Generate the specified amount of negatives using the change target while keeping the range of the relations strategy.\
 --change_source_kd: Generate the specified amount of negatives using the change source while keeping the domain of the relations strategy.\
 --change_both_kdr: Generate the specified amount of negatives using the change both source and target while keeping the domain/range of the relations strategy.\
@@ -49,7 +51,7 @@ The DataGen tool takes as input a knowledge graph file as input and generates tr
 --change_source_random: Generate the specified amount of negatives using the change source at random strategy.\
 --change_both_random: Generate the specified amount of negatives using the change source at random strategy.\
 --change_both_PPR: Generate the specified amount of negatives using the PPR strategy.\
---notNegTraining: Specify ig negatives should not be generated for the training set. If False, they are only generated for the testing set.\
+--notNegTraining: Specify if negatives should not be generated for the training set. If False, they are only generated for the testing set.\
 --notExportGEXF: Specify if the dataset should not be exported as a gexf file, useful for visualisation.\
 
 The next section describe how the steps of the workflow can be customised.
