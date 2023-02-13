@@ -14,6 +14,7 @@ import json
 import datetime
 from Readers import SimpleTriplesReader, NTriplesReader, LinkedDataReader
 from NegativesGenerators import PPRGenerator, RandomGenerator, NegativesGenerator
+from Splitters import RandomSplitter, StatistitalSplitter
 import argparse
 from scipy.stats import ks_2samp
 
@@ -52,7 +53,7 @@ class KGDataset():
 	compute_PPR -- computes the personalised page rank for each entity in the graph.
 	"""
 
-	def __init__(self, results_directory, number_splits=1):
+	def __init__(self, results_directory):
 		"""Arguments:
 
 		results_directory -- the output spliter.
@@ -68,7 +69,6 @@ class KGDataset():
 		self.inverse_tuples = list()
 		self.inverses_dict = dict()
 		self.graphs = dict()
-		self.number_splits = number_splits
 		self.results_directory = results_directory
 		self.entity_edges = dict()
 		self.domains = dict()
@@ -361,140 +361,6 @@ class KGDataset():
 
 			self.group_edges()
 
-	def split_graph_random(self, fraction_test=0.1, fraction_test_relations={}):
-		"""
-		Splits the graph into training and testing sets. Creates as many different splits as given by the "number_splits" property
-
-		Arguments:
-		fraction_test_relations -- a dictionary with the fraction of each relation to take for testing. Default: an empty dictionary, which implies the same fraction for all relations (given by "fraction_test")
-		fraction_test -- the fraction to take from all relations for testing. Only used if "fraction_test_relations" is empty.
-
-		Generates and stores:
-		graphs -- a dictionary with the split identifier as keys, and the training and testing sets of each split as values in a dictionary with "train" and "test" keys. Both "train" and "test" return a dictionary with, so far, only the "positive" key corresponding to the positiva edges in a set.
-		"""
-
-		print("\nDividing graph")
-		print("Performing randomnly selected edges splitting")
-
-		# If we do not provide a fraction of testing for each individual relation, the same fraction is used for all of them
-		if(len(fraction_test_relations) == 0):
-			fraction_test_relations = {rel: fraction_test for rel in self.relations}
-		# We create a variable number of splits.
-		for i in trange(self.number_splits):
-			# We initialise the variable where the splits are stored
-			self.graphs[i] = dict()
-			self.graphs[i]["train"] = dict()
-			self.graphs[i]["test"] = dict()
-			self.graphs[i]["train"]["positive"] = set()
-			self.graphs[i]["test"]["positive"] = set()
-			self.graphs[i]["train"]["negative"] = set()
-			self.graphs[i]["test"]["negative"] = set()
-			# We take a fraction of the edges of each relation
-			for rel in tqdm(self.relations):
-				# We take the edges of the current relation
-				edges = [(rel, s, t, 'P') for s, t in self.grouped_edges[rel]]
-				# Different splits use different offsets for the edges that are taken for testing
-				offset = floor(len(edges) / self.number_splits * i)
-				# We take the fraction for the current relation
-				fraction_test = fraction_test_relations.get(rel, 0.0)
-				# We compute how many edges will be taken for testing
-				num_test = floor(len(edges) * fraction_test)
-				# We compute what will be the indices of the edges that will be taken for training and testing, using the offset
-				ids_test = [(offset + x) % len(edges) for x in range(0, num_test)]
-				ids_train = [(offset + x) % len(edges) for x in range(num_test, len(edges))]
-				# We take the edges of each set using the indices
-				edges_test = [edges[id] for id in ids_test]
-				edges_train = [edges[id] for id in ids_train]
-				# Finally, we store them in the variable
-				self.graphs[i]["test"]["positive"].update(edges_test)
-				self.graphs[i]["train"]["positive"].update(edges_train)
-
-	def split_graph_statistical(self, threshold=0.05):
-		"""
-		Splits the graph into training and testing sets.
-
-		Arguments:
-		threshold -- p-value threshold employed to compare node degrees distributions. Used to tune training/test sets size. 
-
-		Generates and stores:
-		graphs -- a dictionary with the training and testing sets as values in a dictionary with "train" and "test" keys. Both "train" and "test" return a dictionary with, so far, only the "positive" key corresponding to the positiva edges in a set.
-		"""
-
-		print("\nDividing graph")
-		print("Performing split based on downscaling with statistical guarantees algorithm")
-
-		# We initialise the variable where the splits are stored:
-		self.graphs[0] = dict()
-		self.graphs[0]["train"] = dict()
-		self.graphs[0]["test"] = dict()
-		self.graphs[0]["train"]["positive"] = self.edges.copy()
-		self.graphs[0]["test"]["positive"] = set()
-		self.graphs[0]["train"]["negative"] = set()
-		self.graphs[0]["test"]["negative"] = set()
-
-		# We take a fraction of the edges of each relation
-		for rel in tqdm(self.relations):
-
-			# We define an entity degree counter generator
-			dg_gen = {entity:0 for entity in self.entities.keys()}
-			# We define a dictionary to store in and out degrees of nodes of the original graph and the new training set generated
-			degrees = {"original_graph": {"in": dg_gen, "out": dg_gen}, "train": {"in": dg_gen, "out": dg_gen}}
-
-			# We take the edges of the current relation
-			edges = [(rel, s, t, 'P') for s, t in self.grouped_edges[rel]]
-
-			# For each entity of the graph we get its degrees for the current relation
-			# (number of edges of this relation where the entity appears)
-			for relation, s, t, p in edges:
-				degrees["original_graph"]["out"][s] = degrees["original_graph"]["out"][s] + 1
-				degrees["original_graph"]["in"][t] = degrees["original_graph"]["in"][t] + 1
-				degrees["train"]["out"][s] = degrees["train"]["out"][s] + 1
-				degrees["train"]["in"][t] = degrees["train"]["in"][t] + 1
-
-			# For each edge, we aim to decide whether or not the triple can be safely discarded from the train set
-			for relation, s, t, p in tqdm(edges):
-
-				# We remove the edge from the train set
-				self.graphs[0]["train"]["positive"].remove((relation,s,t))
-
-				# Retrieve remaining entities in train set
-				remaining_entities = set()
-				for _, sr, tg in self.graphs[0]["train"]["positive"]:
-					remaining_entities.update((sr, tg))
-
-				# We check that, if edge is discarded, entities s and o will still be present in the new training split
-				if (s in remaining_entities) and (t in remaining_entities):
-					
-					# We training set degrees dictionary
-					degrees["train"]["out"][s] = degrees["train"]["out"][s] - 1
-					degrees["train"]["in"][t] = degrees["train"]["in"][t] - 1
-
-					# We check whether or not new train set degrees and original graph degrees distributions are statistically similar
-					out_p_value = ks_2samp(list(degrees["original_graph"]["out"].values()), list(degrees["train"]["out"].values())).pvalue
-					in_p_value = ks_2samp(list(degrees["original_graph"]["in"].values()), list(degrees["train"]["in"].values())).pvalue
-
-					# To do so, we compare p-value with the given threshold
-					if (out_p_value > threshold) and (in_p_value > threshold):
-						# If the condition is met, we add the triple to the test set
-						self.graphs[0]["test"]["positive"].add((relation,s,t))
-					else:
-						# Otherwise, we undo the changes made
-						self.graphs[0]["train"]["positive"].add((relation,s,t))
-						degrees["train"]["out"][s] = degrees["train"]["out"][s] + 1
-						degrees["train"]["in"][t] = degrees["train"]["in"][t] + 1
-				else:
-					self.graphs[0]["train"]["positive"].add((relation,s,t))
-		
-		# Add positive symbol to triples in generated sets
-		self.graphs[0]["train"]["positive"] = set([(r,s,t,'P') for (r,s,t) in self.graphs[0]["train"]["positive"]])
-		self.graphs[0]["test"]["positive"] = set([(r,s,t,'P') for (r,s,t) in self.graphs[0]["test"]["positive"]])
-
-		# Print sets sizes and split percentages
-		train_percentage = round(len(self.graphs[0]["train"]["positive"])/(len(self.graphs[0]["train"]["positive"])+len(self.graphs[0]["test"]["positive"]))*100,2)
-		test_percentage = round(len(self.graphs[0]["test"]["positive"])/(len(self.graphs[0]["train"]["positive"])+len(self.graphs[0]["test"]["positive"]))*100,2)
-		print("P-value threshold:", threshold, "\nTraining triples:", len(self.graphs[0]["train"]["positive"]), "("+str(train_percentage)+"%)", "\nTest triples:", len(self.graphs[0]["test"]["positive"]), "("+str(test_percentage)+"%)",) 
-
-
 	def add_networkx_edges(self, split, train_test, positive_negative, entities, graph):
 		"""
 		Adds edges to a networkx graph.
@@ -672,10 +538,13 @@ def generate_datasets(	input_file,
 	kgd.read(reader, inverse_threshold=inverse_threshold, min_num_rel=min_num_rel, reach_fraction=reach_fraction, remove_inverses=remove_inverses, create_summary=create_summary, separate_types=separate_types)
 	
 	# We split the graph
+	splitter = None
 	if(splitting_technique == "statistical"):
-		kgd.split_graph_statistical(pvalue_threshold)
+		splitter = StatistitalSplitter(pvalue_threshold)
 	else:
-		kgd.split_graph_random(testing_fraction)
+		splitter = RandomSplitter(testing_fraction)
+	splitter.setKG(kgd)
+	kgd.graphs = splitter.split()
 
 	# We generate the negatives
 	for generator in negatives_generators:
@@ -713,7 +582,6 @@ def main():
 	parser.add_argument('--change_source_random', type=int, help='Generate the specified amount of negatives using the change source at random strategy')
 	parser.add_argument('--change_both_random', type=int, help='Generate the specified amount of negatives using the change source at random strategy')
 	parser.add_argument('--change_both_PPR', type=int, help='Generate the specified amount of negatives using the PPR strategy')
-	
 	
 	parser.add_argument('--notNegTraining', action='store_false', help='Specify if negatives should not be generated for the training set. If False, they are only generated for the testing set')
 	parser.add_argument('--notExportGEXF', action='store_false', help='Specify if the dataset should not be exported as a gexf file, useful for visualisation')

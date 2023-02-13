@@ -1,0 +1,2 @@
+member_holonym	member_meronym
+domain_region	synsetdomain_topic
