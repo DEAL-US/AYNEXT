@@ -94,52 +94,59 @@ for edge in tqdm(self.edges):
 ```
 
 ### Splitting
-Splitting is performed in the split_graph function. It stores information int the "graphs" dictionary. Several splits are generated and stored in the first index of "graphs". The second index separates the training and testing sets. The third index separates the positive and negative examples. During splitting, only the positive examples set is filled in. For the edges of each relation, a set of ids for training and testing set is used to split the graph.
 
-Let us suppose that we want to make a modification, so that the testing edges are taken in a completely random way, instead of in a per-relation basis. We would turn the following piece of code:
+Splitting is performed by the "split" function in classes that extend the Splitter class. It must store information in a graphs dictionary. Several splits are generated and stored in the first index of "graphs". The second index separates the training and testing sets. The third index separates the positive and negative examples. During splitting, only the positive examples set is filled in.
+
+Let us suppose that we want to make a modification to RandomSplitter, so that the testing edges are taken in a completely random way, instead of in a per-relation basis. We would turn the following piece of code:
 
 ```python
 for i in trange(self.number_splits):
-	self.graphs[i] = dict()
-	self.graphs[i]["train"] = dict()
-	self.graphs[i]["test"] = dict()
-	self.graphs[i]["train"]["positive"] = set()
-	self.graphs[i]["test"]["positive"] = set()
-	for rel in tqdm(self.relations):
-		edges = [(rel, s, t) for s, t in self.grouped_edges[rel]]
+	graphs[i] = dict()
+	graphs[i]["train"] = dict()
+	graphs[i]["test"] = dict()
+	graphs[i]["train"]["positive"] = set()
+	graphs[i]["test"]["positive"] = set()
+	graphs[i]["train"]["negative"] = set()
+	graphs[i]["test"]["negative"] = set()
+	for rel in tqdm(self.kg.relations):
+		edges = [(rel, s, t, 'P') for s, t in self.kg.grouped_edges[rel]]
 		offset = floor(len(edges) / self.number_splits * i)
-		fraction_test = fraction_test_relations.get(rel, 0.0)
+		fraction_test = self.fraction_test_relations.get(rel, 0.0)
 		num_test = floor(len(edges) * fraction_test)
 		ids_test = [(offset + x) % len(edges) for x in range(0, num_test)]
 		ids_train = [(offset + x) % len(edges) for x in range(num_test, len(edges))]
 		edges_test = [edges[id] for id in ids_test]
 		edges_train = [edges[id] for id in ids_train]
-		self.graphs[i]["test"]["positive"].update(edges_test)
-		self.graphs[i]["train"]["positive"].update(edges_train)
+		graphs[i]["test"]["positive"].update(edges_test)
+		graphs[i]["train"]["positive"].update(edges_train)
 ```
  
  Into the following one:
  
 ```python
 for i in trange(self.number_splits):
-	self.graphs[i] = dict()
-	self.graphs[i]["train"] = dict()
-	self.graphs[i]["test"] = dict()
-	self.graphs[i]["train"]["positive"] = set()
-	self.graphs[i]["test"]["positive"] = set()
-	offset = floor(len(self.edges) / self.number_splits * i)
-	num_test = floor(len(self.edges) * fraction_test)
-	ids_test = [(offset + x) % len(self.edges) for x in range(0, num_test)]
-	ids_train = [(offset + x) % len(self.edges) for x in range(num_test, len(self.edges))]
-	edges_test = [self.edges[id] for id in ids_test]
-	edges_train = [self.edges[id] for id in ids_train]
-	self.graphs[i]["test"]["positive"].update(edges_test)
-	self.graphs[i]["train"]["positive"].update(edges_train)
+	graphs[i] = dict()
+	graphs[i]["train"] = dict()
+	graphs[i]["test"] = dict()
+	graphs[i]["train"]["positive"] = set()
+	graphs[i]["test"]["positive"] = set()
+	graphs[i]["train"]["negative"] = set()
+	graphs[i]["test"]["negative"] = set()
+		edges = self.kg.edges
+		offset = floor(len(edges) / self.number_splits * i)
+		fraction_test = self.fraction_test_relations.get(rel, 0.0)
+		num_test = floor(len(edges) * fraction_test)
+		ids_test = [(offset + x) % len(edges) for x in range(0, num_test)]
+		ids_train = [(offset + x) % len(edges) for x in range(num_test, len(edges))]
+		edges_test = [edges[id] for id in ids_test]
+		edges_train = [edges[id] for id in ids_train]
+		graphs[i]["test"]["positive"].update(edges_test)
+		graphs[i]["train"]["positive"].update(edges_train)
  ```
  
  ### Negatives generation
  
-The generation of negative examples is performed by the generate_negatives function of classes that extend the NegativesGenerator class. These are used by the generate_negatives function of the KGDataset class, which iterates over every positive in every testing set and delegates the generation of a number of negatives to negatives generators that represent different strategies. Note that there is a filter of the positive examples used to generate negative examples:
+The generation of negative examples is performed by the "generate_negatives" function of classes that extend the NegativesGenerator class. These are used by the generate_negatives function of the KGDataset class, which iterates over every positive in every testing set and delegates the generation of a number of negatives to negatives generators that represent different strategies. Note that there is a filter of the positive examples used to generate negative examples:
 
 ```python
 if(positive[0] not in self.ignored_rels_positives):
@@ -170,7 +177,7 @@ ALPHA -- The significance threshold for the rejection of a null hypothesis. Only
 
 TARGET_QUERY would ideally be used when negative examples have been generated by changing the target of positive examples. The same applies to SOURCE_QUERY and generation by changing the source.
 
-We compute the following metrics: precision, recall, accuracy, MAP, and MRR. Our referential metric is precision. Recall is also useful but to a lesser extend (since recall does not matter if the knowledge extracted is not, in almost all cases, correct). We have included MAP and MRR, since they enjoy some popularity, but there are some concerns regarding them:
+We compute the following metrics: precision, recall, accuracy, MAP, MRR, and WMR. Our referential metric is precision. Recall is also useful but to a lesser extend (since recall does not matter if the knowledge extracted is not, in almost all cases, correct). We have included MAP and MRR, since they enjoy some popularity, but there are some concerns regarding them:
 
 MRR:
 * It can only be computed when a completion tehcnique outputs continuous scores.
@@ -272,9 +279,3 @@ for technique in techniques:
 			# New metrics would be computed here, and stored in the relevant variables
 		#Or here, if the metrics are not computed in a per-relation basis
 ```
-
-## Future work
-
-* <s>Add an option to consider two relation inverses when they overlap to a certain degree, instead of only when there is perfect overlapping.</s>
-* Add additional export formats for the training and test sets
-* Add additional import formats if they are needed for popular knowledge graphs added in the future.
