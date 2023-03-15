@@ -1,4 +1,4 @@
-# AYNEC
+# AYNEXT
 
 This repository contains the DataGen and ResTest tools, which are implemented as python scripts. To run them, check the parameters at the start of the python file, and run it from console. The python files contains documentation about every parameter and function.
 
