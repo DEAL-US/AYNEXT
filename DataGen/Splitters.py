@@ -49,10 +49,12 @@ class StatistitalSplitter(Splitter):
 		graphs[0] = dict()
 		graphs[0]["train"] = dict()
 		graphs[0]["test"] = dict()
+		graphs[0]["valid"] = dict()
 		graphs[0]["train"]["positive"] = self.kg.edges.copy()
 		graphs[0]["test"]["positive"] = set()
 		graphs[0]["train"]["negative"] = set()
 		graphs[0]["test"]["negative"] = set()
+		
 
 		# We take a fraction of the edges of each relation
 		for rel in tqdm(self.kg.relations):

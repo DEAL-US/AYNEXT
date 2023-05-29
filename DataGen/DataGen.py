@@ -456,6 +456,9 @@ class KGDataset():
 					
 		self.graphs[split][train_test]["negative"] = negatives
 
+	def create_validation(self, valid_fraction):
+		# TODO Separar un porcentaje a validación. Cuidado con coger los negativos de cada positivo
+
 	def export_files(self, split, include_train_negatives, include_dataproperties, include_types):
 		"""
 		Creates the output files, excluding the gexf files.
@@ -518,6 +521,7 @@ def generate_datasets(	input_file,
 						min_num_rel, 
 						reach_fraction, 
 						testing_fraction, 
+						validation_fraction,
 						splitting_technique,
 						pvalue_threshold,
 						negatives_generators,
@@ -545,6 +549,12 @@ def generate_datasets(	input_file,
 		splitter = RandomSplitter(testing_fraction)
 	splitter.setKG(kgd)
 	kgd.graphs = splitter.split()
+	kgd.graphs[0]['valid'] = dict()
+	kgd.graphs[0]['valid']['positive'] = set()
+	kgd.graphs[0]['valid']['negative'] = set()
+
+	if(validation_fraction > 0):
+		kgd.create_validation(validation_fraction)
 
 	# We generate the negatives
 	for generator in negatives_generators:
@@ -572,6 +582,7 @@ def main():
 	parser.add_argument('--notCreateSum', action='store_false', help='Specify if you do not want to create an html summary of the relations frequency and the entities degree')
 	parser.add_argument('--computePPR', action='store_true', help='Specify to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used')
 	parser.add_argument('--fractionTest', type=float, default=0.2, help='Fraction of the edges used for testing')
+	parser.add_argument('--fractionValidation', type=float, default=0.0, help='Fraction of the edges from the test sed to be used for validation')
 	parser.add_argument('--splittingTechnique', choices=['random','statistical'], default='random', help='Algorithm employed to generate train/test splits out of the graph')
 	parser.add_argument('--pValueThreshold', type=float, default=0.05, help='Threshold value for distribution comparation in statistical graph splitting technique')
 
@@ -599,6 +610,7 @@ def main():
 	MIN_NUM_REL = args.minNumRel
 	REACH_FRACTION = args.reachFraction
 	TESTING_FRACTION = args.fractionTest
+	VALIDATION_FRACTION = args.fractionValidation
 	SPLITTING_TECHNIQUE = args.splittingTechnique
 	PVALUE_THRESHOLD = args.pValueThreshold
 	GENERATORS = {}
@@ -631,6 +643,7 @@ def main():
 						MIN_NUM_REL,
 						REACH_FRACTION,
 						TESTING_FRACTION,
+						VALIDATION_FRACTION,
 						SPLITTING_TECHNIQUE,
 						PVALUE_THRESHOLD,
 						GENERATORS,
