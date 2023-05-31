@@ -24,6 +24,8 @@ PVALUES_OUTPUT_FILE = "ResTest/mockup-pvalues.csv"
 
 THRESHOLDS = [0.3]
 
+HITS_AT = [1,5]
+
 TARGET_QUERY = True
 
 SOURCE_QUERY = True
@@ -44,6 +46,9 @@ for technique in techniques:
 		metrics[technique][-1][rel] = dict()
 		metrics[technique][-1][rel]["CS"] = dict()
 		metrics[technique][-1][rel]["CT"] = dict()
+		for n in HITS_AT:
+			metrics[technique][-1][rel][f"hits_at_{n}_CS"] = 0
+			metrics[technique][-1][rel][f"hits_at_{n}_CT"] = 0
 	for threshold in THRESHOLDS:
 		metrics[technique][threshold] = dict()
 		for rel in rels:
@@ -57,6 +62,7 @@ for technique in techniques:
 
 RRs = {technique:{"CS":{rel: [] for rel in rels}, "CT":{rel: [] for rel in rels}}  for technique in techniques}
 APs = {technique:{"CS":{rel: [] for rel in rels}, "CT":{rel: [] for rel in rels}} for technique in techniques}
+hits = {technique:{n: 0 for n in HITS_AT}}
 
 def update_rr_ap(grouped, n_type):
 	for key, value in grouped.items():
@@ -75,6 +81,10 @@ def update_rr_ap(grouped, n_type):
 						# RR is computed using only the position of the first positive
 						if(rr == 0):
 							rr = 1 / (i + 1)
+						# Checking if the positive is within the n first for the hits@n metrics
+						for n in HITS_AT:
+							if(i+1 <= n):
+								metrics[technique][-1][rel][f"hits_at_{n}_{n_type}"] += 1
 						# We keep track of the true positives so far to compute AP
 						TP += 1
 					# AP is computed from the first N results, where N is the number of true positives
@@ -99,6 +109,7 @@ for technique in techniques:
 	for rel in rels:
 		C_s = len(results[(results["type"]=="CS") & (results["relation"]==rel)])
 		C_o = len(results[(results["type"]=="CT") & (results["relation"]==rel)])
+		num_positives = len(results[(results["type"]=="P") & (results["relation"]==rel)])
 		r_s = []
 		r_o = []
 		if(SOURCE_QUERY):
@@ -113,6 +124,11 @@ for technique in techniques:
 			metrics[technique][-1][rel]["CS"]["MAP"] = map_cs
 			lines_metrics.append((technique, -1, rel, "MRR_CS", mrr_cs))
 			lines_metrics.append((technique, -1, rel, "MAP_CS", map_cs))
+			lines_metrics.append((technique, -1, rel, "MAP_CS", map_cs))
+			for n in HITS_AT:
+				hits_at_n = metrics[technique][-1][rel][f"hits_at_{n}_CS"] / num_positives
+				metrics[technique][-1][rel][f"hits_at_{n}_CS"] = hits_at_n
+				lines_metrics.append((technique, -1, rel, f"hits_at_{n}_CS", hits_at_n))
 		if(TARGET_QUERY):
 			r_o = np.array([1/rr for rr in RRs[technique]["CT"][rel]])
 			mrr_ct = np.mean(RRs[technique]["CT"][rel])	
@@ -125,6 +141,10 @@ for technique in techniques:
 			metrics[technique][-1][rel]["CT"]["MAP"] = map_ct
 			lines_metrics.append((technique, -1, rel, "MRR_CT", mrr_cs))
 			lines_metrics.append((technique, -1, rel, "MAP_CT", mrr_cs))
+			for n in HITS_AT:
+				hits_at_n = metrics[technique][-1][rel][f"hits_at_{n}_CT"] / num_positives
+				metrics[technique][-1][rel][f"hits_at_{n}_CT"] = hits_at_n
+				lines_metrics.append((technique, -1, rel, f"hits_at_{n}_CT", hits_at_n))
 
 		sum_r_s = np.sum(C_s*np.log(r_s)) if len(r_s==0) else 0
 		sum_r_o = np.sum(C_o*np.log(r_o)) if len(r_o==0) else 0
@@ -139,15 +159,67 @@ for technique in techniques:
 		MAP_CSs = list(filter(None.__ne__, [metrics[technique][-1][rel]["CS"]["MAP"] for rel in rels]))
 		metrics[technique][-1]["MRR_CSs"] = MRR_CSs
 		metrics[technique][-1]["MAP_CSs"] = MAP_CSs
+		for n in HITS_AT:
+			hits_at_n = list(filter(None.__ne__, [metrics[technique][-1][rel][f"hits_at_{n}_CS"] for rel in rels]))
+			metrics[technique][-1][f"hits_at_{n}_CSs"] = hits_at_n
 
 	if(TARGET_QUERY):
 		MRR_CTs = list(filter(None.__ne__, [metrics[technique][-1][rel]["CT"]["MRR"] for rel in rels]))
 		MAP_CTs = list(filter(None.__ne__, [metrics[technique][-1][rel]["CT"]["MAP"] for rel in rels]))
 		metrics[technique][-1]["MRR_CTs"] = MRR_CSs
 		metrics[technique][-1]["MAP_CTs"] = MAP_CSs
+		for n in HITS_AT:
+			hits_at_n = list(filter(None.__ne__, [metrics[technique][-1][rel][f"hits_at_{n}_CT"] for rel in rels]))
+			metrics[technique][-1][f"hits_at_{n}_CTs"] = hits_at_n
 
 	WMRs = list(filter(None.__ne__, [metrics[technique][-1][rel]["WMR"] for rel in rels]))
 	metrics[technique][-1]["WMRs"] = WMRs
+
+	# Micro and macro average for ranking metrics
+	metrics[technique][-1]["macro-average"] = dict()
+	metrics[technique][-1]["micro-average"] = dict()
+
+	if(SOURCE_QUERY):
+		all_rrs_cs = [metrics[technique][-1][rel]["CS"]["MRR"] for rel in rels]
+		all_map_cs = [metrics[technique][-1][rel]["CS"]["MAP"] for rel in rels]
+		micro_avg_rrs_cs = np.mean(np.hstack(all_rrs_cs))
+		macro_avg_rrs_cs = np.mean([np.mean(rrs) for rrs in all_rrs_cs])
+		micro_avg_map_cs = np.mean(np.hstack(all_map_cs))
+		macro_avg_map_cs = np.mean([np.mean(map) for map in all_map_cs])
+		metrics[technique][-1]["macro-average"]["MRR_CS"] = macro_avg_rrs_cs
+		metrics[technique][-1]["micro-average"]["MRR_CS"] = micro_avg_rrs_cs
+		metrics[technique][-1]["macro-average"]["MAP_CS"] = macro_avg_map_cs
+		metrics[technique][-1]["micro-average"]["MAP_CS"] = micro_avg_map_cs
+		lines_metrics.append((technique, -1, "macro-average", "MRR_CS", macro_avg_rrs_cs))
+		lines_metrics.append((technique, -1, "micro-average", "MRR_CS", micro_avg_rrs_cs))
+		lines_metrics.append((technique, -1, "macro-average", "MAP_CS", macro_avg_map_cs))
+		lines_metrics.append((technique, -1, "micro-average", "MAP_CS", micro_avg_map_cs))
+		for n in HITS_AT:
+			all_hits_at_cs = [metrics[technique][-1][rel][f"hits_at_{n}_CS"] for rel in rels]
+			macro_avg_hits_at_cs = np.mean(all_hits_at_cs)
+			metrics[technique][-1]["macro-average"][f"hits_at_{n}_CS"] = macro_avg_hits_at_cs
+			lines_metrics.append((technique, -1, "macro-average", f"hits_at_{n}_CS", macro_avg_hits_at_cs))
+
+	if(TARGET_QUERY):
+		all_rrs_ct = [metrics[technique][-1][rel]["CT"]["MRR"] for rel in rels]
+		all_map_ct = [metrics[technique][-1][rel]["CT"]["MAP"] for rel in rels]
+		micro_avg_rrs_ct = np.mean(np.hstack(all_rrs_ct))
+		macro_avg_rrs_ct = np.mean([np.mean(rrs) for rrs in all_rrs_ct])
+		micro_avg_map_ct = np.mean(np.hstack(all_map_ct))
+		macro_avg_map_ct = np.mean([np.mean(map) for map in all_map_ct])
+		metrics[technique][-1]["macro-average"]["MRR_CT"] = macro_avg_rrs_ct
+		metrics[technique][-1]["micro-average"]["MRR_CT"] = micro_avg_rrs_ct
+		metrics[technique][-1]["macro-average"]["MAP_CT"] = macro_avg_map_ct
+		metrics[technique][-1]["micro-average"]["MAP_CT"] = micro_avg_map_ct
+		lines_metrics.append((technique, -1, "macro-average", "MRR_CT", macro_avg_rrs_ct))
+		lines_metrics.append((technique, -1, "micro-average", "MRR_CT", micro_avg_rrs_ct))
+		lines_metrics.append((technique, -1, "macro-average", "MAP_CT", macro_avg_map_ct))
+		lines_metrics.append((technique, -1, "micro-average", "MAP_CT", micro_avg_map_ct))
+		for n in HITS_AT:
+			all_hits_at_ct = [metrics[technique][-1][rel][f"hits_at_{n}_CT"] for rel in rels]
+			macro_avg_hits_at_ct = np.mean(all_hits_at_ct)
+			metrics[technique][-1]["macro-average"][f"hits_at_{n}_CT"] = macro_avg_hits_at_ct
+			lines_metrics.append((technique, -1, "macro-average", f"hits_at_{n}_CT", macro_avg_hits_at_ct))
 
 # Computing the confusion matrix
 for index, row in results.iterrows():
@@ -266,8 +338,12 @@ pvalues = dict()
 pvalues_metrics = ["precisions", "recalls", "f1s", "WMRs"]
 if(SOURCE_QUERY):
 	pvalues_metrics.extend(("MRR_CSs", "MAP_CSs"))
+	for n in HITS_AT:
+		pvalues_metrics.append(f"hits_at_{n}_CSs")
 if(TARGET_QUERY):
 	pvalues_metrics.extend(("MRR_CTs", "MAP_CTs"))
+	for n in HITS_AT:
+		pvalues_metrics.append(f"hits_at_{n}_CTs")
 THRESHOLDS.append(-1)
 
 # Computing the p-values

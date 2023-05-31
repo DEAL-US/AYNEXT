@@ -379,7 +379,7 @@ class KGDataset():
 		print(f'Adding {len(graph_edges)} edges')
 		graph.add_edges_from(graph_edges)
 
-	def export_gexf(self, split, include_train, include_test, include_positive, include_negative):
+	def export_gexf(self, split, include_train, include_test, include_validation, include_positive, include_negative):
 		"""
 		Generates and stores the gexf file in the output folder, named "dataset.gexf".
 
@@ -404,6 +404,11 @@ class KGDataset():
 				self.add_networkx_edges(split, "test", "positive", entities, g)
 			if(include_negative):
 				self.add_networkx_edges(split, "test", "negative", entities, g)
+		if(include_validation):
+			if(include_positive):
+				self.add_networkx_edges(split, "valid", "positive", entities, g)
+			if(include_negative):
+				self.add_networkx_edges(split, "valid", "negative", entities, g)
 		g.add_nodes_from(entities)
 		nx.write_gexf(g, self.results_directory + "/dataset.gexf")
 
@@ -457,7 +462,18 @@ class KGDataset():
 		self.graphs[split][train_test]["negative"] = negatives
 
 	def create_validation(self, valid_fraction):
-		# TODO Separar un porcentaje a validación. Cuidado con coger los negativos de cada positivo
+		print("Creating validation set")
+
+		positives = list(self.graphs[0]["test"]["positive"])
+		number_valid_positives = int(len(positives) * valid_fraction)
+
+		valid_positives = set(positives[:number_valid_positives])
+		test_positives = set(positives[number_valid_positives:])
+
+		self.graphs[0]["test"]["positive"] = test_positives
+		self.graphs[0]["valid"]["positive"] = valid_positives
+
+
 
 	def export_files(self, split, include_train_negatives, include_dataproperties, include_types):
 		"""
@@ -488,6 +504,12 @@ class KGDataset():
 			for edge in self.graphs[split]["test"]["positive"]:
 				file.write("\t".join((edge[1], edge[0], edge[2], "1", edge[3])) + "\n")
 			for edge in self.graphs[split]["test"]["negative"]:
+				file.write("\t".join((edge[1], edge[0], edge[2], "-1", edge[3])) + "\n")
+		print("Exporting validation triples")
+		with open(self.results_directory + "/validation.txt", "w", encoding="utf-8") as file:
+			for edge in self.graphs[split]["valid"]["positive"]:
+				file.write("\t".join((edge[1], edge[0], edge[2], "1", edge[3])) + "\n")
+			for edge in self.graphs[split]["valid"]["negative"]:
 				file.write("\t".join((edge[1], edge[0], edge[2], "-1", edge[3])) + "\n")
 		print("Exporting relations")
 		with open(self.results_directory + "/relations.txt", "w", encoding="utf-8") as file:
@@ -553,6 +575,7 @@ def generate_datasets(	input_file,
 	kgd.graphs[0]['valid']['positive'] = set()
 	kgd.graphs[0]['valid']['negative'] = set()
 
+	# Validation set
 	if(validation_fraction > 0):
 		kgd.create_validation(validation_fraction)
 
@@ -561,12 +584,15 @@ def generate_datasets(	input_file,
 		generator.setKG(kgd)
 		generator.initialize()
 	kgd.generate_negatives(0, "test", negatives_generators, True, False)
+	if(validation_fraction > 0):
+		kgd.generate_negatives(0, "valid", negatives_generators, True, False)
 	if(generate_negatives_training):
 		kgd.generate_negatives(0, "train", negatives_generators, True, False)
+	
 	# We export the files
 	kgd.export_files(0, True, include_data_prop, separate_types)
 	if(export_gexf):
-		kgd.export_gexf(0, True, True, True, True)
+		kgd.export_gexf(0, True, True, True, True, True)
 
 def main():
 	parser = argparse.ArgumentParser(prog="AYNEC DataGen", fromfile_prefix_chars='@', description='Generates evaluation datasets from knowledge graphs.')
