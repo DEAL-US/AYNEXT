@@ -608,7 +608,7 @@ def main():
 	parser.add_argument('--notCreateSum', action='store_false', help='Specify if you do not want to create an html summary of the relations frequency and the entities degree')
 	parser.add_argument('--computePPR', action='store_true', help='Specify to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used')
 	parser.add_argument('--fractionTest', type=float, default=0.2, help='Fraction of the edges used for testing')
-	parser.add_argument('--fractionValidation', type=float, default=0.0, help='Fraction of the edges from the test sed to be used for validation')
+	parser.add_argument('--fractionValidation', type=float, default=0.0, help='Fraction of the edges from the test set to be used for validation')
 	parser.add_argument('--splittingTechnique', choices=['random','statistical'], default='random', help='Algorithm employed to generate train/test splits out of the graph')
 	parser.add_argument('--pValueThreshold', type=float, default=0.05, help='Threshold value for distribution comparation in statistical graph splitting technique')
 

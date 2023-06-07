@@ -1,10 +1,14 @@
 # AYNEXT
 
-This repository contains the DataGen and ResTest tools, which are implemented as python scripts. To run them, check the parameters at the start of the python file, and run it from console. The python files contains documentation about every parameter and function.
+AYNEXT is a Python suite aimed towards researchers in the field of link prediction in Knowledge Graphs, making it easy to configure and customize the creation of evaluation datasets and the computation of evaluation metrics and statistical significance tests for each pair of link prediction techniques. AYNEXT is composed by the DataGen and the ResTest tools, which are implemented as Python scripts. To run them, check the parameters at the start of the Python file, and run it from console. The Python files contains documentation about every parameter and function. The next image presents AYNEXT's workflow:
 
-The following files with format examples are provided: "WN11.txt" and "mockup-results.txt", corresponding to the input of the DataGen and ResTest tools. In "WN11.txt", each line contains a triple in the following order: source, relation, target. In "mockup-results.txt", each line contains the source, relation, target, ground-truth (gt), type (**P**ositive, **C**hange **S**ource, **C**hange **T**arget, or **C**hange **B**oth) and a column with the result of each compared technique. Please, note that the file is expected to have the same header format, but with different techniques.
+<p align="center">
+	<img width="80%" src="img/workflow.svg" alt="AYNEXT's workflow">
+</p>
 
-This software is licensed under the GPLv3 licence.
+The following files with format examples are provided: `WN11.txt` and `mockup-results.txt`, corresponding to the input of the DataGen and ResTest tools. In `WN11.txt`, each line contains a triple in the following order: source, relation, target. In `mockup-results.txt`, each line contains the source, relation, target, ground-truth (gt), type (**P**ositive, **C**hange **S**ource, **C**hange **T**arget, or **C**hange **B**oth) and a column with the result of each compared technique. Please, note that the file is expected to have the same header format, but with different techniques.
+
+This software is licensed under the GPLv3 licence. Python ≥ 3.8 and dependencies in `requirements.txt` are required.
 
 ## Use cases
 
@@ -12,13 +16,13 @@ Though the way completion techniques work is always very similar, there are seve
 
 ### <s,r,t> → score
 
-This is the standard case: the techniques are fed individual triples and output a score. Use DataGen to create a dataset with the desired number of negatives, then apply the technique to every triple in the testing set. Finally, apply ResTest to the results in order to obtain metrics.
+This is the standard case: the techniques are fed individual triples and output a score. Use DataGen to create a dataset with the desired number of negatives (false facts), then apply the technique to every triple in the testing set. Finally, apply ResTest to the results in order to obtain metrics.
 
 ### <s,r,?> → t / <?,r,t> → s
 
 The query approach takes a query as input (i.e, "where was John born?"), and outputs a ranking with a score for every possible candidate entity. There are two possibilities:
 
-* Use DataGen to create a dataset *with no negatives* that is, with 0 negatives per positive, or use an existing dataset with negatives in the testing set but ignore them. While applying the techniques, use each existing combination among the positives of source/relation or relation/target as queries. The positives of each query are those in the testing set. The negatives, any possible triple that is not in the testing or training set. Include both positives and negatives in the results file. Finally, apply ResTest to the results in order to obtain metrics, which will include MAP and MRR.
+* Use DataGen to create a dataset *with no negatives*, that is, with 0 negatives per positive, or use an existing dataset with negatives in the testing set but ignore them. While applying the techniques, use each existing combination among the positives of source/relation or relation/target as queries. The positives of each query are those in the testing set. The negatives, any possible triple that is not in the testing or training set. Include both positives and negatives in the results file. Finally, apply ResTest to the results in order to obtain metrics, which will include MAP and MRR.
 * If applying the technique to every possible candidate is too time-consuming, Use DataGen to create a dataset *with several negatives per positive*, which will represent the negative candidates of the query. Then, apply the technique and ResTest.
 
 ### training → set of <s,r,t>
@@ -29,32 +33,37 @@ Finally, apply ResTest to the results in order to obtain metrics.
 
 ## DataGen
 
-The DataGen tool takes as input a knowledge graph file as input and generates training/testing datasets for completion, as well as several auxiliary files. The following parameters can be used for configuration:
+The DataGen tool takes as input a knowledge graph file as input and generates training/testing/validation datasets for completion, as well as several auxiliary files. Its architecture is as described in the image below. Note that ResTest (also included in the image) has no modules because of its nature, in which there are no easily interchangeable parts:
 
---inF: The input file to read the original knowledge graph from.\
---outF: The folder where the output will be stored. If the folder does not exist, it will be created.\
---format: The format of the input file. Choices: 'rdf', 'simpleTriplesReader'. Default = 'simpleTriplesReader'.\
---fractionAll: The overall fraction to take from the graph. The fraction is not the exact final fraction, but the probability of keeping each edge. Default = 1.0.\
---minNumRel: Minimum frequency required to keep a relation during preprocessing. Default = 2\
---reachFraction: Fraction of the total number of edges to keep during preprocessing, accumulating the relations, sorted by frequency. Use 1.0 to keep all edges. Default = 1.0.\
---removeInv: Specify if detected inverses should be removed during preprocessing.\
---thresInv: The overlap threshold used to detect inverses. For a pair to be detected as inverses, both relations must have a fraction of their edges as inverses in the other relation above the given threshold. Default = 0.9.\
---notCreateSum: Specify if you do not want to create an html summary of the relations frequency and the entities degree.\
---computePPR: Specify to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used.\
---fractionTest: Fraction of the edges used for testing. Default = 0.2.\
---splittingTechnique: Algorithm employed to generate train/test splits out of the graph. Choices: 'random','statistical'. Default = 'random'.\
---pValueThreshold: Threshold value for distribution comparation in statistical graph splitting technique. Default = 0.05.\
---change_target_kr: Generate the specified amount of negatives using the change target while keeping the range of the relations strategy.\
---change_source_kd: Generate the specified amount of negatives using the change source while keeping the domain of the relations strategy.\
---change_both_kdr: Generate the specified amount of negatives using the change both source and target while keeping the domain/range of the relations strategy.\
---change_target_random: Generate the specified amount of negatives using the change target at random strategy.\
---change_source_random: Generate the specified amount of negatives using the change source at random strategy.\
---change_both_random: Generate the specified amount of negatives using the change source at random strategy.\
---change_both_PPR: Generate the specified amount of negatives using the PPR strategy.\
---notNegTraining: Specify if negatives should not be generated for the training set. If False, they are only generated for the testing set.\
---notExportGEXF: Specify if the dataset should not be exported as a gexf file, useful for visualisation.\
+<p align="center">
+	<img width="80%" src="img/class_diagram_AYNEXT.svg" alt="AYNEXT's architecture">
+</p>
 
-The next section describe how the steps of the workflow can be customised.
+The following console parameters can be used for DataGen configuration:
+
+- **inF**: The input file to read the original knowledge graph from.
+- **outF**: The folder where the output will be stored. If the folder does not exist, it will be created.
+- **format**: The format of the input file. Choices: 'rdf', 'simpleTriplesReader'. Default = 'simpleTriplesReader'.
+- **fractionAll**: The overall fraction to take from the graph. The fraction is not the exact final fraction, but the probability of keeping each edge. Default = 1.0.
+- **minNumRel**: Minimum frequency required to keep a relation during preprocessing. Default = 2
+- **reachFraction**: Fraction of the total number of edges to keep during preprocessing, accumulating the relations, sorted by frequency. Use 1.0 to keep all edges. Default = 1.0.
+- **removeInv**: Specify if detected inverses should be removed during preprocessing.
+- **thresInv**: The overlap threshold used to detect inverses. For a pair to be detected as inverses, both relations must have a fraction of their edges as inverses in the other relation above the given threshold. Default = 0.9.
+- **notCreateSum**: Specify if you do not want to create an html summary of the relations frequency and the entities degree.
+- **computePPR**: Specify to compute the personalised page rank (PPR) of each node in the graph. So far this is only useful when generating negatives with the "PPR" strategy, so it should be set to False if it is not used.
+- **fractionTest**: Fraction of the edges used for testing. Default = 0.2.
+- **fractionValidation**: Fraction of the edges from the test set to be used for validation. Default = 0.0.
+- **splittingTechnique**: Algorithm employed to generate train/test splits out of the graph. Choices: 'random','statistical'. Default = 'random'.
+- **pValueThreshold**: Threshold value for distribution comparation in statistical graph splitting technique. Default = 0.05.
+- **change_target_kr**: Generate the specified amount of negatives using the change of target while keeping the range of the relations strategy.
+- **change_source_kd**: Generate the specified amount of negatives using the change of source while keeping the domain of the relations strategy.
+- **change_both_kdr**: Generate the specified amount of negatives using the change of both source and target while keeping the domain/range of the relations strategy.
+- **change_target_random**: Generate the specified amount of negatives using the change of target at random strategy.
+- **change_source_random**: Generate the specified amount of negatives using the change of source at random strategy.
+- **change_both_random**: Generate the specified amount of negatives using the change of source at random strategy.
+- **change_both_PPR**: Generate the specified amount of negatives using the PPR strategy.
+- **notNegTraining**: Specify if negatives should not be generated for the training set. If False, they are only generated for the testing set.
+- **notExportGEXF**: Specify if the dataset should not be exported as a gexf file, useful for visualisation.
 
 ### Use example
 
@@ -64,18 +73,20 @@ Let us suppose that we want to generate an evaluation dataset from the WN11 file
 python DataGen.py --inF ./WN11.txt --outF ./WN11-dataset --minNumRel 10 --removeInv --change_source_random 2
 ```
 
-Let us now suppose that we want to generate an evaluation dataset from a rdf graph in a file named "wikidata.rdf". We want to use 50% of the dataset for testing, but without generating negatives. We want to remove relations with less than 30 instances and only keep relations that cover 90% of the graph. We also want to remove inverses want to remove inverses with an overlapping threshold of 0.95. We don't want to generate the .gexf file. Finally, since the original file is large, we only want to use aroung 75% of its triples. We would run the following command: 
+Let us now suppose that we want to generate an evaluation dataset from a rdf graph in a file named `wikidata.rdf`. We want to use 50% of the dataset for testing, but without generating negatives. We want to remove relations with less than 30 instances and only keep relations that cover 90% of the graph. We also want to remove inverses want to remove inverses with an overlapping threshold of 0.95. We don't want to generate the .gexf file. Finally, since the original file is large, we only want to use aroung 75% of its triples. We would run the following command: 
 
 ```
 python DataGen.py --inF ./wikidata.rdf --outF ./wikidata-dataset --format rdf --fractionAll 0.75 --minNumRel 30 --reachFraction 0.9 --removeInv --thresInv 0.95 --fractionTest 0.5 --notExportGEXF
 ```
 
+The next section describe how the steps of the workflow can be customised.
+
 ### Preprocessing
-The basic data reading is performed by the "read" function of classes that extends the Reader class.
+The basic data reading is performed by the `read` function of classes that extends the Reader class.
 
-The preprocessing itself, however, is performed in the read function of the DatasetsGenerator class, which has most parameters relevant to preprocessing.
+The preprocessing itself, however, is performed in the read function of the `DatasetsGenerator` class, which has most parameters relevant to preprocessing.
 
-This class makes use of a Reader to obtain the dictionary/set of entities, relations and edges, and stores them in the attributes of the class. Any additional preprocessing would be included here. For example, let's assume we want to remove relations with name longer than 10 characters. We would do so by adding the following code before the "self.find_inverses()" line:
+This class makes use of a `Reader` to obtain the dictionary/set of entities, relations and edges, and stores them in the attributes of the class. Any additional preprocessing would be included here. For example, let's assume we want to remove relations with name longer than 10 characters. We would do so by adding the following code before the `self.find_inverses()` line:
 
 ```python
 removed_rels = [rel for rel in self.relations if len(rel) > 10]
@@ -83,21 +94,21 @@ print("\nRemoving relations with more than 10 characters")
 self.remove_rels(removed_rels)
 ```
 
-Note the call to "self.create_summary(accepted_rels, amounts, accumulated_fractions)", which creates the html summary from the provided relations and their frequency. We generate it before removing inverses (if specified so) in order to not to mess with the displayed accumulated frequency. It is also in this function that we store any information about the graph in any inner attribute that is considered necessary. For example, the following piece of code stores the outgoing edge of each entity node:
+Note the call to `self.create_summary(accepted_rels, amounts, accumulated_fractions)`, which creates the html summary from the provided relations and their frequency. We generate it before removing inverses (if specified so) in order to not to mess with the displayed accumulated frequency. It is also in this function that we store any information about the graph in any inner attribute that is considered necessary. For example, the following piece of code stores the outgoing edge of each entity node:
 
 ```python
 print("Storing outgoing edges for each node")
 for edge in tqdm(self.edges):
-  if(edge[1] not in self.entity_edges):
-    self.entity_edges[edge[1]] = list()
-  self.entity_edges[edge[1]].append(edge)
+	if(edge[1] not in self.entity_edges):
+		self.entity_edges[edge[1]] = list()
+		self.entity_edges[edge[1]].append(edge)
 ```
 
 ### Splitting
 
-Splitting is performed by the "split" function in classes that extend the Splitter class. It must store information in a graphs dictionary. Several splits are generated and stored in the first index of "graphs". The second index separates the training and testing sets. The third index separates the positive and negative examples. During splitting, only the positive examples set is filled in.
+Splitting is performed by the `split` function in classes that extend the `Splitter` class. It must store information in a graphs dictionary. Several splits are generated and stored in the first index of `graphs`. The second index separates the training and testing sets. The third index separates the positive and negative examples. During splitting, only the positive examples set is filled in.
 
-Let us suppose that we want to make a modification to RandomSplitter, so that the testing edges are taken in a completely random way, instead of in a per-relation basis. We would turn the following piece of code:
+Let us suppose that we want to make a modification to `RandomSplitter`, so that the testing edges are taken in a completely random way, instead of in a per-relation basis. We would turn the following piece of code:
 
 ```python
 for i in trange(self.number_splits):
@@ -132,27 +143,28 @@ for i in trange(self.number_splits):
 	graphs[i]["test"]["positive"] = set()
 	graphs[i]["train"]["negative"] = set()
 	graphs[i]["test"]["negative"] = set()
-		edges = self.kg.edges
-		offset = floor(len(edges) / self.number_splits * i)
-		fraction_test = self.fraction_test_relations.get(rel, 0.0)
-		num_test = floor(len(edges) * fraction_test)
-		ids_test = [(offset + x) % len(edges) for x in range(0, num_test)]
-		ids_train = [(offset + x) % len(edges) for x in range(num_test, len(edges))]
-		edges_test = [edges[id] for id in ids_test]
-		edges_train = [edges[id] for id in ids_train]
-		graphs[i]["test"]["positive"].update(edges_test)
-		graphs[i]["train"]["positive"].update(edges_train)
+
+	edges = self.kg.edges
+	offset = floor(len(edges) / self.number_splits * i)
+	fraction_test = self.fraction_test_relations.get(rel, 0.0)
+	num_test = floor(len(edges) * fraction_test)
+	ids_test = [(offset + x) % len(edges) for x in range(0, num_test)]
+	ids_train = [(offset + x) % len(edges) for x in range(num_test, len(edges))]
+	edges_test = [edges[id] for id in ids_test]
+	edges_train = [edges[id] for id in ids_train]
+	graphs[i]["test"]["positive"].update(edges_test)
+	graphs[i]["train"]["positive"].update(edges_train)
  ```
  
  ### Negatives generation
  
-The generation of negative examples is performed by the "generate_negatives" function of classes that extend the NegativesGenerator class. These are used by the generate_negatives function of the KGDataset class, which iterates over every positive in every testing set and delegates the generation of a number of negatives to negatives generators that represent different strategies. Note that there is a filter of the positive examples used to generate negative examples:
+The generation of negative examples is performed by the `generate_negatives` function of classes that extend the `NegativesGenerator` class. These are used by the generate_negatives function of the `KGDataset` class, which iterates over every positive in every testing set and delegates the generation of a number of negatives to negatives generators that represent different strategies. Note that there is a filter of the positive examples used to generate negative examples:
 
 ```python
 if(positive[0] not in self.ignored_rels_positives):
 ```
 
-self.ignored_rels_positives is an initially empty list where we store relations that are ignored. We include a relation in this list when it is impossible to generate any negative from a positive of the relation. This happens, for example, when we want to generate negatives by changing the target of a triple to another entity while keeping the range of the relation, but all instances of the relation have the same target. Adding this check makes it possible to quickly discard such relations. This option, however, can be toggled.
+`self.ignored_rels_positives` is an initially empty list where we store relations that are ignored. We include a relation in this list when it is impossible to generate any negative from a positive of the relation. This happens, for example, when we want to generate negatives by changing the target of a triple to another entity while keeping the range of the relation, but all instances of the relation have the same target. Adding this check makes it possible to quickly discard such relations. This option, however, can be toggled.
 
 The generation of negatives themselves takes place in generate_negatives functions of generator classes that take as arguments the positive and the number of negatives to generate, with additional parameters being provided during initialization. Once such generator is defined, it can be included as an additional strategy. For example, let us suppose that we want to implement a negatives generation strategy that merely replaces the source of the triple with a fictional entity named "foo", and the target with a fictional entity named "bar". We would define the following function:
 
@@ -163,21 +175,30 @@ def generate_negatives_foobar(self, positive, number_negatives):
 	return negatives
  ```
 
+ ### HTML Summary
+
+If required, DataGen can generate an `html` file containing useful insights about the graph, as shown below:
+
+<p align="center">
+	<img width="90%" src="img/html_report.png" alt="AYNEXT's architecture">
+</p>
+
 ## ResTest
 
 The ResTest tool takes as input a file containing the gorund truth and the score given by each technique to each triple being tested. The results of each technique should each be in a different column, with a header corresponding to the name of the technique. The score of the technique can be either a binary score of a continuous probability. The following parameters, found at the beginning of the ResTest.py file, can be used for easy configuration of testing parameters:
 
-RESULTS_FILE -- The input file containing the results of each technique. It should contain the following rows: triple source, triple relation, triple target, ground truth, and a column for each technique's results. Please, see the provided example, mockup_results.txt.
-METRICS_OUTPUT_FILE -- The name of the file where the metrics will be stored.
-PVALUES_OUTPUT_FILE -- The name of the file where the p-values will be stored.
-THRESHOLDS -- A list with the positive/negative thresholds that will be used when computing metrics and p-values.
-TARGET_QUERY -- Whether or not use the query <source, relation, ?> to compute ranking related metrics (MRR and MAP)
-SOURCE_QUERY -- Whether or not use the query <?, relation, target> to compute ranking related metrics (MRR and MAP)
-ALPHA -- The significance threshold for the rejection of a null hypothesis. Only used for console messages.
+- **RESULTS_FILE**: The input file containing the results of each technique. It should contain the following rows: triple source, triple relation, triple target, ground truth, and a column for each technique's results. Please, see the provided example, mockup_results.txt.
+- **METRICS_OUTPUT_FILE**: The name of the file where the metrics will be stored.
+- **PVALUES_OUTPUT_FILE**: The name of the file where the p-values will be stored.
+- **THRESHOLDS**: A list with the positive/negative thresholds that will be used when computing metrics and p-values.
+- **TARGET_QUERY**: Whether or not use the query <source, relation, ?> to compute ranking related metrics (MRR and MAP).
+- **SOURCE_QUERY**: Whether or not use the query <?, relation, target> to compute ranking related metrics (MRR and MAP).
+- **HITS_AT**: A list of values for K used to compute the Hits@K metric.
+- **ALPHA**: The significance threshold for the rejection of a null hypothesis. Only used for console messages.
 
-TARGET_QUERY would ideally be used when negative examples have been generated by changing the target of positive examples. The same applies to SOURCE_QUERY and generation by changing the source.
+**TARGET_QUERY** would ideally be used when negative examples have been generated by changing the target of positive examples. The same applies to **SOURCE_QUERY** and generation by changing the source.
 
-We compute the following metrics: precision, recall, accuracy, MAP, MRR, and WMR. Our referential metric is precision. Recall is also useful but to a lesser extend (since recall does not matter if the knowledge extracted is not, in almost all cases, correct). We have included MAP and MRR, since they enjoy some popularity, but there are some concerns regarding them:
+ResTest computes the following metrics: **precision**, **recall**, **accuracy**, **MAP**, **MRR**, **WMR** and **Hits@K**. It also performs **statistical tests**, for each possible pair of techniques, the same metrics mentioned just above, acceptance thresholds and test types (Wilcoxon and Kolmogorov–Smirnov). Our referential metric is precision. Recall is also useful but to a lesser extend (since recall does not matter if the knowledge extracted is not, in almost all cases, correct). We have included MAP and MRR, since they enjoy some popularity, but there are some concerns regarding them:
 
 MRR:
 * It can only be computed when a completion tehcnique outputs continuous scores.
@@ -193,7 +214,9 @@ Still, they are useful metrics, and their relevancy depends on how the completio
 
 All metrics are stored in a dictionary called metrics, which has the following structure:
 
-metrics\[technique]\[threshold]\[relation]\[metric name] = x
+```python
+metrics[technique][threshold][relation][metric name] = x
+```
 
 Where threshold can be set to -1 if the metric does not depend on any threshold
 
@@ -229,6 +252,10 @@ def update_rr_ap(grouped):
 						# RR is computed using only the position of the first positive
 						if(rr == 0):
 							rr = 1 / (i + 1)
+						# Checking if the positive is within the n first for the hits@n metrics
+						for n in HITS_AT:
+							if(i+1 <= n):
+								metrics[technique][-1][rel][f"hits_at_{n}_{n_type}"] += 1
 						# We keep track of the true positives so far to compute AP
 						TP += 1
 					# AP is computed from the first N results, where N is the number of true positives
@@ -279,3 +306,54 @@ for technique in techniques:
 			# New metrics would be computed here, and stored in the relevant variables
 		#Or here, if the metrics are not computed in a per-relation basis
 ```
+
+### Use example
+
+Let us suppose that we want to evaluate the performance of three link prediction techniques `AllYes`, `AllNo` and `AllRandom`, whose results are stored in `mockup-results.txt`. The input file of ResTest must have the format: triple (source, relation and target), ground-truth (positive or
+negative triple), type of triple (P for positive triple, anything else for the correspondant negative generation technique), and link prediction techniques scores:
+
+```
+source	relation	target	gt	type	AllYes	AllNo	AllRandom
+coralbells_1			type_of			alumbloom_1		1	P	1.0	0.0	0.94
+genus_trollius_1		member_meronym	globe_flower_1	1	P	1.0	0.0	0.46
+genus_gymnelis_1		member_meronym	fish_doctor_1	1	P	1.0	0.0	0.39
+residence_2				type_of			house_3			1	P	1.0	0.0	0.39
+alexandrian_laurel_1	type_of			poon_1			1	P	1.0	0.0	0.99
+[...]
+```
+Next, we configure ResTest.py input parameters which are located at the begining of the file, and execute it:
+
+```
+python ResTest/ResTest.py
+```
+The first file produced contains the obtained metrics (ranking based) for each technique and relation:
+```
+technique	threshold	relation	metric	value
+AllYes	-1	part_of	MRR_CS	1.0
+AllYes	-1	part_of	MAP_CS	0.99
+AllYes	-1	part_of	MRR_CT	1.0
+AllYes	-1	part_of	MAP_CT	1.0
+AllYes	-1	part_of	WMR		1.0
+[...]
+AllYes	0.3	similar_to		precision	0.33
+AllYes	0.3	similar_to		recall		1.0
+AllYes	0.3	similar_to		f1			0.5
+AllYes	0.3	domain_region	precision	0.33
+AllYes	0.3	domain_region	recall		1.0
+AllYes	0.3	domain_region	f1			0.5
+[...]
+```
+
+The second file contains the statistical test results (set based metrics) for each possible techniques pair:
+```
+tech1	tech2	threshold	metric	test	p-value
+AllYes	AllRandom	0.3	precisions	KS			0.13
+AllYes	AllRandom	0.3	precisions	Wilcoxon	0.5
+AllYes	AllRandom	-1	MRR_CSs		Wilcoxon	0.004
+AllYes	AllNo		-1	MAP_CSs		KS			1.0
+AllYes	AllNo		-1	MAP_CSs		Wilcoxon	1.0
+AllNo	AllRandom	-1	MRR_CSs		Wilcoxon	0.004
+```
+
+
+
