@@ -316,11 +316,11 @@ negative triple), type of triple (P for positive triple, anything else for the c
 
 ```
 source	relation	target	gt	type	AllYes	AllNo	AllRandom
-coralbells_1			type_of			alumbloom_1		1	P	1.0	0.0	0.94
-genus_trollius_1		member_meronym	globe_flower_1	1	P	1.0	0.0	0.46
-genus_gymnelis_1		member_meronym	fish_doctor_1	1	P	1.0	0.0	0.39
-residence_2				type_of			house_3			1	P	1.0	0.0	0.39
-alexandrian_laurel_1	type_of			poon_1			1	P	1.0	0.0	0.99
+coralbells_1		type_of		alumbloom_1		1	P	1.0	0.0	0.94
+genus_trollius_1	member_meronym	globe_flower_1		1	P	1.0	0.0	0.46
+genus_gymnelis_1	member_meronym	fish_doctor_1		1	P	1.0	0.0	0.39
+residence_2		type_of		house_3			1	P	1.0	0.0	0.39
+alexandrian_laurel_1	type_of		poon_1			1	P	1.0	0.0	0.99
 [...]
 ```
 Next, we configure ResTest.py input parameters which are located at the begining of the file, and execute it:
@@ -335,24 +335,24 @@ AllYes	-1	part_of	MRR_CS	1.0
 AllYes	-1	part_of	MAP_CS	0.99
 AllYes	-1	part_of	MRR_CT	1.0
 AllYes	-1	part_of	MAP_CT	1.0
-AllYes	-1	part_of	WMR		1.0
+AllYes	-1	part_of	WMR	1.0
 [...]
-AllYes	0.3	similar_to		precision	0.33
-AllYes	0.3	similar_to		recall		1.0
-AllYes	0.3	similar_to		f1			0.5
+AllYes	0.3	similar_to	precision	0.33
+AllYes	0.3	similar_to	recall		1.0
+AllYes	0.3	similar_to	f1		0.5
 AllYes	0.3	domain_region	precision	0.33
 AllYes	0.3	domain_region	recall		1.0
-AllYes	0.3	domain_region	f1			0.5
+AllYes	0.3	domain_region	f1		0.5
 [...]
 ```
 
 The second file contains the statistical test results (set based metrics) for each possible techniques pair:
 ```
 tech1	tech2	threshold	metric	test	p-value
-AllYes	AllRandom	0.3	precisions	KS			0.13
+AllYes	AllRandom	0.3	precisions	KS		0.13
 AllYes	AllRandom	0.3	precisions	Wilcoxon	0.5
 AllYes	AllRandom	-1	MRR_CSs		Wilcoxon	0.004
-AllYes	AllNo		-1	MAP_CSs		KS			1.0
+AllYes	AllNo		-1	MAP_CSs		KS		1.0
 AllYes	AllNo		-1	MAP_CSs		Wilcoxon	1.0
 AllNo	AllRandom	-1	MRR_CSs		Wilcoxon	0.004
 ```
