@@ -595,7 +595,7 @@ def generate_datasets(	input_file,
 		kgd.export_gexf(0, True, True, True, True, True)
 
 def main():
-	parser = argparse.ArgumentParser(prog="AYNEC DataGen", fromfile_prefix_chars='@', description='Generates evaluation datasets from knowledge graphs.')
+	parser = argparse.ArgumentParser(prog="AYNEXT DataGen", fromfile_prefix_chars='@', description='Generates evaluation datasets from knowledge graphs.')
 	parser.add_argument('--version', action='version', version='%(prog)s' + VERSION)
 	parser.add_argument('--inF', required=True, help='The input file to read the original knowledge graph from')
 	parser.add_argument('--outF', required=True, help='The folder where the output will be stored. If the folder does not exist, it will be created')

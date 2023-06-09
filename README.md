@@ -8,7 +8,9 @@ AYNEXT is a Python suite aimed towards researchers in the field of link predicti
 
 The following files with format examples are provided: `WN11.txt` and `mockup-results.txt`, corresponding to the input of the DataGen and ResTest tools. In `WN11.txt`, each line contains a triple in the following order: source, relation, target. In `mockup-results.txt`, each line contains the source, relation, target, ground-truth (gt), type (**P**ositive, **C**hange **S**ource, **C**hange **T**arget, or **C**hange **B**oth) and a column with the result of each compared technique. Please, note that the file is expected to have the same header format, but with different techniques.
 
-This software is licensed under the GPLv3 licence. Python ≥ 3.8 and dependencies in `requirements.txt` are required.
+A Jupyter Notebook, [UseExamples](UseExamples.ipynb), is provided to users in order to ilustrate AYNEXT usage and customisation.
+
+This software is licensed under the GPLv3 licence. Python ≥ 3.9 and dependencies in `requirements.txt` are required.
 
 ## Use cases
 
