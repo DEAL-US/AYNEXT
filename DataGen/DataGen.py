@@ -361,21 +361,21 @@ class KGDataset():
 
 			self.group_edges()
 
-	def add_networkx_edges(self, split, train_test, positive_negative, entities, graph):
+	def add_networkx_edges(self, split, train_test_valid, positive_negative, entities, graph):
 		"""
 		Adds edges to a networkx graph.
 
 		Arguments:
 		split -- the split to add edges from.
-		train_test -- whether to add the train or test edges. Should be "train" or "test".
+		train_test_valid -- whether to add the train, test or validation edges.
 		positive_negative -- whether to add the positive or the negative examples. Should be "positive" or "negative".
 		entities -- a set with entities, used to keep track of the entities that are being added to a single graph.
 		"""
 
-		edges = self.graphs[split][train_test][positive_negative]
+		edges = self.graphs[split][train_test_valid][positive_negative]
 		entities.update([str(edge[1]) for edge in edges])
 		entities.update([str(edge[2]) for edge in edges])
-		graph_edges = [(str(edge[1]), str(edge[2]), {"Label": str(edge[0]), "positive": True if positive_negative == "positive" else False, "train": True if train_test == "train" else False, "type": edge[3]}) for edge in edges]
+		graph_edges = [(str(edge[1]), str(edge[2]), {"Label": str(edge[0]), "positive": True if positive_negative == "positive" else False, "set": train_test_valid, "type": edge[3]}) for edge in edges]
 		print(f'Adding {len(graph_edges)} edges')
 		graph.add_edges_from(graph_edges)
 
